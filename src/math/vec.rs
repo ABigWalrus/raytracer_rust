@@ -1,5 +1,7 @@
 use std::ops;
 
+use crate::util::{random_float, random_float_range};
+
 #[derive(Clone)]
 pub struct Vec3 {
     value: [f64; 3],
@@ -56,6 +58,63 @@ impl Vec3 {
 
     pub fn unit(&self) -> Self {
         self.div(self.length())
+    }
+
+    pub fn random() -> Self {
+        Self::new(random_float(), random_float(), random_float())
+    }
+
+    pub fn random_range(min: f64, max: f64) -> Self {
+        Self::new(
+            random_float_range(min, max),
+            random_float_range(min, max),
+            random_float_range(min, max),
+        )
+    }
+
+    pub fn random_unit() -> Self {
+        loop {
+            let vec = Vec3::random_range(-1.0, 1.0);
+            let lensq = vec.length_squared();
+            if lensq >= 1e-160 && lensq <= 1.0 {
+                return vec.div(f64::sqrt(lensq));
+            }
+        }
+    }
+
+    pub fn random_on_hemisphere(normal: &Vec3) -> Self {
+        let vec = Vec3::random_unit();
+        if vec.dot(normal) >= 0.0 { vec } else { -vec }
+    }
+
+    pub fn near_zero(&self) -> bool {
+        let s = 1e-8;
+        self.x().abs() < s && self.y().abs() < s && self.z().abs() < s
+    }
+
+    pub fn reflect(&self, normal: &Vec3) -> Self {
+        self.clone() - normal.mul(self.dot(&normal) * 2.0)
+    }
+
+    pub fn refract(&self, normal: &Vec3, factor: f64) -> Self {
+        let cos_theta = f64::min((-self.clone()).dot(normal), 1.0);
+        let out_perp = (self.clone() + normal.mul(cos_theta)).mul(factor);
+        let out_parallel = normal.mul(-f64::sqrt((1.0 - out_perp.length_squared()).abs()));
+
+        out_perp + out_parallel
+    }
+
+    pub fn random_in_unit_disk() -> Self {
+        loop {
+            let vec = Vec3::new(
+                random_float_range(-1.0, 1.0),
+                random_float_range(-1.0, 1.0),
+                0.0,
+            );
+            if vec.length_squared() <= 1.0 {
+                return vec;
+            }
+        }
     }
 }
 
