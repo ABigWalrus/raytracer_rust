@@ -1,6 +1,6 @@
 use std::ops;
 
-use crate::util::{random_float, random_float_range};
+use crate::util::random_float_range;
 
 #[derive(Clone)]
 pub struct Vec3 {
@@ -60,9 +60,9 @@ impl Vec3 {
         self.div(self.length())
     }
 
-    pub fn random() -> Self {
-        Self::new(random_float(), random_float(), random_float())
-    }
+    // pub fn random() -> Self {
+    //     Self::new(random_float(), random_float(), random_float())
+    // }
 
     pub fn random_range(min: f64, max: f64) -> Self {
         Self::new(
@@ -82,10 +82,10 @@ impl Vec3 {
         }
     }
 
-    pub fn random_on_hemisphere(normal: &Vec3) -> Self {
-        let vec = Vec3::random_unit();
-        if vec.dot(normal) >= 0.0 { vec } else { -vec }
-    }
+    // pub fn random_on_hemisphere(normal: &Vec3) -> Self {
+    //     let vec = Vec3::random_unit();
+    //     if vec.dot(normal) >= 0.0 { vec } else { -vec }
+    // }
 
     pub fn near_zero(&self) -> bool {
         let s = 1e-8;

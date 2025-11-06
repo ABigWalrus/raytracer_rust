@@ -1,8 +1,9 @@
-use std::rc::Rc;
+use std::{ops::RangeInclusive, rc::Rc};
 
 use crate::{
     math::Vec3,
-    util::{Color, Interval, random_float},
+    rt_core::camera::Color,
+    util::{random_float, surrounds},
 };
 
 pub struct Ray {
@@ -47,18 +48,18 @@ impl HitRectord {
             material,
         }
     }
-    fn set_face_normal(&mut self, ray: &Ray, outward_normal: &Vec3) {
-        self.front_face = ray.dir().dot(outward_normal) < 0.0;
-        self.normal = if self.front_face {
-            outward_normal.clone()
-        } else {
-            -outward_normal.clone()
-        };
-    }
+    // fn set_face_normal(&mut self, ray: &Ray, outward_normal: &Vec3) {
+    //     self.front_face = ray.dir().dot(outward_normal) < 0.0;
+    //     self.normal = if self.front_face {
+    //         outward_normal.clone()
+    //     } else {
+    //         -outward_normal.clone()
+    //     };
+    // }
 }
 
 pub trait Hittable {
-    fn hit(&self, ray: &Ray, interval: Interval) -> Option<HitRectord>;
+    fn hit(&self, ray: &Ray, range: RangeInclusive<f64>) -> Option<HitRectord>;
 }
 
 pub struct Sphere {
@@ -78,7 +79,7 @@ impl Sphere {
 }
 
 impl Hittable for Sphere {
-    fn hit(&self, ray: &Ray, interval: Interval) -> Option<HitRectord> {
+    fn hit(&self, ray: &Ray, range: RangeInclusive<f64>) -> Option<HitRectord> {
         let oc = self.center.clone() - ray.origin().clone();
 
         let a = ray.dir().length_squared();
@@ -95,10 +96,10 @@ impl Hittable for Sphere {
 
         let mut root = (h - sqrt_discr) / a;
 
-        if !interval.surrounds(root) {
+        if !surrounds(&range, &root) {
             root = (h + sqrt_discr) / a;
 
-            if !interval.surrounds(root) {
+            if !surrounds(&range, &root) {
                 return None;
             }
         }
@@ -116,28 +117,26 @@ impl Hittable for Sphere {
 }
 
 pub struct HittableList {
-    objects: Vec<Box<dyn Hittable>>,
+    items: Vec<Box<dyn Hittable>>,
 }
 
 impl HittableList {
     pub fn new() -> Self {
-        Self {
-            objects: Vec::new(),
-        }
+        Self { items: Vec::new() }
     }
 
     pub fn add(&mut self, hittable: impl Hittable + 'static) {
-        self.objects.push(Box::new(hittable));
+        self.items.push(Box::new(hittable));
     }
 }
 
 impl Hittable for HittableList {
-    fn hit(&self, ray: &Ray, interval: Interval) -> Option<HitRectord> {
-        let mut closest = interval.max;
+    fn hit(&self, ray: &Ray, range: RangeInclusive<f64>) -> Option<HitRectord> {
+        let mut closest = *range.end();
         let mut closest_record = None;
 
-        self.objects.iter().for_each(|hittable| {
-            if let Some(record) = hittable.hit(ray, Interval::new(interval.min, closest)) {
+        self.items.iter().for_each(|hittable| {
+            if let Some(record) = hittable.hit(ray, *range.start()..=closest) {
                 closest = record.t;
                 closest_record = Some(record);
             }
@@ -169,9 +168,9 @@ impl Lambertian {
 impl Material for Lambertian {
     fn scatter(
         &self,
-        ray_in: &Ray,
+        _ray_in: &Ray,
         record: &HitRectord,
-        attenuation: &Color,
+        _attenuation: &Color,
     ) -> Option<(Ray, Color)> {
         let mut scatter = record.normal.clone() + Vec3::random_unit();
         if scatter.near_zero() {
@@ -198,7 +197,7 @@ impl Material for Metal {
         &self,
         ray_in: &Ray,
         record: &HitRectord,
-        attenuation: &Color,
+        _attenuation: &Color,
     ) -> Option<(Ray, Color)> {
         let reflected = ray_in.dir().reflect(&record.normal);
         let reflected = reflected.unit() + Vec3::random_unit().mul(self.fuzz);
@@ -234,7 +233,7 @@ impl Material for Dielectric {
         &self,
         ray_in: &Ray,
         record: &HitRectord,
-        attenuation: &Color,
+        _attenuation: &Color,
     ) -> Option<(Ray, Color)> {
         let ri = if record.front_face {
             1.0 / self.refraction_factor

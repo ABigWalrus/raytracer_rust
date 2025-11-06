@@ -1,19 +1,12 @@
-use core::f64;
-use std::{
-    fs::File,
-    io::{self, Write},
-    time::Instant,
-};
+use std::{fs::File, time::Instant};
 
 use crate::{
-    math::{
-        Vec3,
-        ray::{Dielectric, HittableList, Lambertian, Metal, Sphere},
-    },
-    util::{Camera, Color, random_float, random_float_range},
+    math::Vec3,
+    rt_core::{Camera, Color, Dielectric, HittableList, Lambertian, Metal, Sphere},
 };
 
 mod math;
+mod rt_core;
 mod util;
 
 fn main() {
@@ -33,32 +26,32 @@ fn main() {
         material_ground,
     ));
 
-    for a in -11..11 {
-        for b in -11..11 {
-            let choose_material = random_float();
-            let center = Vec3::new(
-                a as f64 + 0.9 * random_float(),
-                0.2,
-                b as f64 + 0.9 * random_float(),
-            );
+    // for a in -11..11 {
+    //     for b in -11..11 {
+    //         let choose_material = random_float();
+    //         let center = Vec3::new(
+    //             a as f64 + 0.9 * random_float(),
+    //             0.2,
+    //             b as f64 + 0.9 * random_float(),
+    //         );
 
-            if (center.clone() - Vec3::new(4.0, 0.2, 0.0)).length() > 0.9 {
-                if choose_material < 0.8 {
-                    let albedo = Color::random() * Color::random();
-                    let sphere_material = Lambertian::new(albedo);
-                    world.add(Sphere::new(center, 0.2, sphere_material));
-                } else if choose_material < 0.95 {
-                    let albedo = Color::random_range(0.5, 1.0);
-                    let fuzz = random_float_range(0.0, 0.5);
-                    let sphere_material = Metal::new(albedo, fuzz);
-                    world.add(Sphere::new(center, 0.2, sphere_material));
-                } else {
-                    let sphere_material = Dielectric::new(1.5);
-                    world.add(Sphere::new(center, 0.2, sphere_material));
-                }
-            }
-        }
-    }
+    //         if (center.clone() - Vec3::new(4.0, 0.2, 0.0)).length() > 0.9 {
+    //             if choose_material < 0.8 {
+    //                 let albedo = Color::random() * Color::random();
+    //                 let sphere_material = Lambertian::new(albedo);
+    //                 world.add(Sphere::new(center, 0.2, sphere_material));
+    //             } else if choose_material < 0.95 {
+    //                 let albedo = Color::random_range(0.5, 1.0);
+    //                 let fuzz = random_float_range(0.0, 0.5);
+    //                 let sphere_material = Metal::new(albedo, fuzz);
+    //                 world.add(Sphere::new(center, 0.2, sphere_material));
+    //             } else {
+    //                 let sphere_material = Dielectric::new(1.5);
+    //                 world.add(Sphere::new(center, 0.2, sphere_material));
+    //             }
+    //         }
+    //     }
+    // }
 
     let sphere_material = Dielectric::new(1.5);
     world.add(Sphere::new(Vec3::new(0.0, 1.0, 0.0), 1.0, sphere_material));
@@ -71,11 +64,12 @@ fn main() {
 
     let camera = Camera::build(
         16.0 / 9.0,
-        1200,
+        // 1200,
+        300,
         20.0,
         Vec3::new(13.0, 2.0, 3.0),
         Vec3::new(0.0, 0.0, 0.0),
-        500,
+        10,
         50,
         0.6,
         10.0,
