@@ -1,19 +1,26 @@
-use std::sync::Arc;
+use std::{iter, sync::Arc};
 
-use wgpu::SurfaceTexture;
+use wgpu::{SurfaceTexture, wgc::device::queue};
 use winit::{
     application::ApplicationHandler, dpi::PhysicalSize, event::WindowEvent, window::Window,
 };
 
-#[derive(Default)]
 pub struct RayTracer {
-    window: Option<Window>,
+    state: Option<State>,
+}
+
+impl RayTracer {
+    pub fn new() -> Self {
+        Self { state: None }
+    }
 }
 
 struct State {
+    window: Arc<Window>,
     surface: wgpu::Surface<'static>,
     window_size: PhysicalSize<u32>,
     device: wgpu::Device,
+    queue: wgpu::Queue,
     compute_pipeline: wgpu::ComputePipeline,
     compute_bind_group: wgpu::BindGroup,
     render_pipeline: wgpu::RenderPipeline,
@@ -211,9 +218,11 @@ impl State {
         });
 
         Self {
+            window,
             surface,
             window_size,
             device,
+            queue,
             compute_pipeline,
             compute_bind_group,
             render_pipeline,
@@ -222,6 +231,7 @@ impl State {
     }
 
     fn render(&self) {
+        self.window.request_redraw();
         let frame = self.surface.get_current_texture().unwrap();
         let view = frame.texture.create_view(&Default::default());
 
@@ -231,24 +241,53 @@ impl State {
                     label: Some("render_encoder"),
                 });
 
-        let mut pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
-            label: Some("compute_pass"),
-            timestamp_writes: None,
-        });
+        {
+            let mut pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
+                label: Some("compute_pass"),
+                timestamp_writes: None,
+            });
 
-        pass.set_pipeline(&self.compute_pipeline);
-        pass.set_bind_group(0, &self.compute_bind_group, &[]);
-        pass.dispatch_workgroups(self.window_size.width, self.window_size.height, 1);
+            pass.set_pipeline(&self.compute_pipeline);
+            pass.set_bind_group(0, &self.compute_bind_group, &[]);
+            pass.dispatch_workgroups(self.window_size.width, self.window_size.height, 1);
+        }
+
+        {
+            let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                label: Some("render_pass"),
+                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                    view: &view,
+                    depth_slice: None,
+                    resolve_target: None,
+                    ops: wgpu::Operations {
+                        load: wgpu::LoadOp::Clear(wgpu::Color::BLACK),
+                        store: wgpu::StoreOp::Store,
+                    },
+                })],
+                depth_stencil_attachment: None,
+                timestamp_writes: None,
+                occlusion_query_set: None,
+            });
+
+            pass.set_pipeline(&self.render_pipeline);
+            pass.set_bind_group(0, &self.render_bind_group, &[]);
+            pass.draw(0..3, 0..1);
+        }
+
+        self.queue.submit(iter::once(encoder.finish()));
+        frame.present();
     }
 }
 
 impl ApplicationHandler for RayTracer {
     fn resumed(&mut self, event_loop: &winit::event_loop::ActiveEventLoop) {
-        self.window = Some(
+        let window = Arc::new(
             event_loop
                 .create_window(Window::default_attributes())
                 .unwrap(),
         );
+
+        self.state = Some(pollster::block_on(State::new(window)));
     }
 
     fn window_event(
@@ -263,7 +302,10 @@ impl ApplicationHandler for RayTracer {
                 event_loop.exit();
             }
             WindowEvent::RedrawRequested => {
-                self.window.as_ref().unwrap().request_redraw();
+                if let Some(state) = &self.state {
+                    state.render();
+                }
+                // self.window.as_ref().unwrap().request_redraw();
             }
             _ => (),
         }
