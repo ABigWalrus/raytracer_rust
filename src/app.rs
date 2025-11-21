@@ -4,7 +4,11 @@ use std::{
     time::{Instant, SystemTime, UNIX_EPOCH},
 };
 
-use wgpu::{SurfaceTexture, util::DeviceExt, wgc::device::queue};
+use wgpu::{
+    SurfaceTexture,
+    util::{self, DeviceExt},
+    wgc::device::queue,
+};
 use winit::{
     application::ApplicationHandler, dpi::PhysicalSize, event::WindowEvent, window::Window,
 };
@@ -27,19 +31,21 @@ struct State {
     queue: wgpu::Queue,
     compute_pipeline: wgpu::ComputePipeline,
     compute_bind_group: wgpu::BindGroup,
+    util_bind_group: wgpu::BindGroup,
     render_pipeline: wgpu::RenderPipeline,
     render_bind_group: wgpu::BindGroup,
-    time_buffer: wgpu::Buffer,
+    util_buffer: wgpu::Buffer,
+    util_data: UtilData,
 }
 
-struct TimeData {
+struct UtilData {
     time: u32,
     _pad0: u32,
     _pad1: u32,
     _pad2: u32,
 }
 
-impl TimeData {
+impl UtilData {
     fn new() -> Self {
         Self {
             time: get_time(),
@@ -48,6 +54,11 @@ impl TimeData {
             _pad2: 0,
         }
     }
+
+    fn update(&mut self) {
+        self.time = get_time();
+    }
+
     fn to_bytes(&self) -> [u8; 16] {
         let mut bytes = [0u8; 16];
         bytes[0..4].copy_from_slice(&self.time.to_le_bytes());
@@ -141,57 +152,64 @@ impl State {
         let compute_bind_group_layot =
             device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
                 label: Some("compute_bg_layout"),
-                entries: &[
-                    wgpu::BindGroupLayoutEntry {
-                        binding: 0,
-                        visibility: wgpu::ShaderStages::COMPUTE,
-                        ty: wgpu::BindingType::StorageTexture {
-                            access: wgpu::StorageTextureAccess::WriteOnly,
-                            format: wgpu::TextureFormat::Rgba8Unorm,
-                            view_dimension: wgpu::TextureViewDimension::D2,
-                        },
-                        count: None,
+                entries: &[wgpu::BindGroupLayoutEntry {
+                    binding: 0,
+                    visibility: wgpu::ShaderStages::COMPUTE,
+                    ty: wgpu::BindingType::StorageTexture {
+                        access: wgpu::StorageTextureAccess::WriteOnly,
+                        format: wgpu::TextureFormat::Rgba8Unorm,
+                        view_dimension: wgpu::TextureViewDimension::D2,
                     },
-                    wgpu::BindGroupLayoutEntry {
-                        binding: 1,
-                        visibility: wgpu::ShaderStages::COMPUTE,
-                        ty: wgpu::BindingType::Buffer {
-                            ty: wgpu::BufferBindingType::Uniform,
-                            has_dynamic_offset: false,
-                            min_binding_size: None,
-                        },
-                        count: None,
-                    },
-                ],
-            });
-
-        let time = TimeData::new();
-        let time_buffer: wgpu::Buffer =
-            device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                label: Some("time_buffer"),
-                contents: &time.to_bytes(),
-                usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+                    count: None,
+                }],
             });
 
         let compute_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
             label: Some("compute_bg"),
             layout: &compute_bind_group_layot,
-            entries: &[
-                wgpu::BindGroupEntry {
+            entries: &[wgpu::BindGroupEntry {
+                binding: 0,
+                resource: wgpu::BindingResource::TextureView(&texture_view),
+            }],
+        });
+
+        let util_data = UtilData::new();
+
+        let util_buffer: wgpu::Buffer =
+            device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                label: Some("util_buffer"),
+                contents: &util_data.to_bytes(),
+                usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+            });
+
+        let util_bind_group_layout =
+            device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+                label: Some("util_bind_group_layout"),
+                entries: &[wgpu::BindGroupLayoutEntry {
                     binding: 0,
-                    resource: wgpu::BindingResource::TextureView(&texture_view),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 1,
-                    resource: time_buffer.as_entire_binding(),
-                },
-            ],
+                    visibility: wgpu::ShaderStages::COMPUTE,
+                    ty: wgpu::BindingType::Buffer {
+                        ty: wgpu::BufferBindingType::Uniform,
+                        has_dynamic_offset: false,
+                        min_binding_size: None,
+                    },
+                    count: None,
+                }],
+            });
+
+        let util_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: Some("util_bind_data"),
+            layout: &util_bind_group_layout,
+            entries: &[wgpu::BindGroupEntry {
+                binding: 0,
+                resource: util_buffer.as_entire_binding(),
+            }],
         });
 
         let compute_pipeline_layout =
             device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
                 label: Some("compute_pipeline_layout"),
-                bind_group_layouts: &[&compute_bind_group_layot],
+                bind_group_layouts: &[&compute_bind_group_layot, &util_bind_group_layout],
                 push_constant_ranges: &[],
             });
 
@@ -286,17 +304,18 @@ impl State {
             queue,
             compute_pipeline,
             compute_bind_group,
+            util_bind_group,
             render_pipeline,
             render_bind_group,
-            time_buffer,
+            util_data,
+            util_buffer,
         }
     }
 
-    fn update(&self) {
-        let time = TimeData::new();
-        println!("{}", time.time);
+    fn update(&mut self) {
+        self.util_data.update();
         self.queue
-            .write_buffer(&self.time_buffer, 0, &time.to_bytes());
+            .write_buffer(&self.util_buffer, 0, &self.util_data.to_bytes());
     }
 
     fn render(&self) {
@@ -318,6 +337,7 @@ impl State {
 
             pass.set_pipeline(&self.compute_pipeline);
             pass.set_bind_group(0, &self.compute_bind_group, &[]);
+            pass.set_bind_group(1, &self.util_bind_group, &[]);
             pass.dispatch_workgroups(self.window_size.width, self.window_size.height, 1);
         }
 
@@ -371,7 +391,7 @@ impl ApplicationHandler for RayTracer {
                 event_loop.exit();
             }
             WindowEvent::RedrawRequested => {
-                if let Some(state) = &self.state {
+                if let Some(state) = &mut self.state {
                     state.update();
                     state.render();
                 }

@@ -1,7 +1,7 @@
 @group(0) @binding(0) var outputTex : texture_storage_2d<rgba8unorm, write>;
-@group(0) @binding(1) var<uniform> time : TimeData;
+@group(1) @binding(0) var<uniform> util : UtilData;
 
-struct TimeData {
+struct UtilData {
     time: u32,
     _pad0: u32,
     _pad1: u32,
@@ -96,8 +96,8 @@ fn main(@builtin(global_invocation_id) id : vec3<u32>, @builtin(num_workgroups) 
     }
 
     let color = vec4<f32>(
-        f32(id.x) / f32(size.x) * sin(f32(time.time) / 1000.0),
-        f32(id.y) / f32(size.y) * cos(f32(time.time) / 1000.0),
+        f32(id.x) / f32(size.x) * sin(f32(util.time) / 1000.0),
+        f32(id.y) / f32(size.y) * cos(f32(util.time) / 1000.0),
         0.3,
         1.0
     );
