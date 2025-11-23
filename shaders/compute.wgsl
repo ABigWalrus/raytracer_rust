@@ -83,10 +83,25 @@ struct Ray {
     dir: vec3<f32>
 }
 
-// fn get_ray(camera: Camera, i: u32, j: u32) -> Ray {
-    
-//     return Ray();
-// }
+fn random_float(x: f32, y: f32) -> f32 {
+    return 0.2;
+}
+
+fn sample_square(x: f32, y: f32) -> vec3<f32> {
+    return vec3(random_float(x, y) - 0.5, random_float(y, x) - 0.5, 0.0);
+}
+
+fn get_ray(camera: Camera, i: u32, j: u32) -> Ray {
+    let offset = sample_square(f32(i),f32(j));
+    let pixel_sample = camera.image_center + camera.pixel_delta_u * (f32(i) + offset.x) + camera.pixel_delta_u * (f32(i) + offset.x);
+    let origin = vec3(0.0, 0.0, 0.0);
+    if(camera.defocus_angle <= 0.0) {
+        origin = camera.center;
+    } else {
+        origin = defocus_disk_sample(cmaera);
+    }
+    return Ray();
+}
 
 @compute @workgroup_size(8, 8)
 fn main(@builtin(global_invocation_id) id : vec3<u32>, @builtin(num_workgroups) size : vec3<u32>) {
