@@ -13,6 +13,8 @@ use winit::{
     application::ApplicationHandler, dpi::PhysicalSize, event::WindowEvent, window::Window,
 };
 
+use crate::texture::Texture;
+
 pub struct RayTracer {
     state: Option<State>,
 }
@@ -36,6 +38,7 @@ struct State {
     render_bind_group: wgpu::BindGroup,
     util_buffer: wgpu::Buffer,
     util_data: UtilData,
+    random_texture: Texture,
 }
 
 struct UtilData {
@@ -182,28 +185,65 @@ impl State {
                 usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
             });
 
+        let bytes = include_bytes!("../assets/textures/random_noise.png");
+        let random_texture = Texture::from_image(
+            "./assets/textures/random_noise.png",
+            "random_noise",
+            &device,
+            &queue,
+        )
+        .unwrap();
+
         let util_bind_group_layout =
             device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
                 label: Some("util_bind_group_layout"),
-                entries: &[wgpu::BindGroupLayoutEntry {
-                    binding: 0,
-                    visibility: wgpu::ShaderStages::COMPUTE,
-                    ty: wgpu::BindingType::Buffer {
-                        ty: wgpu::BufferBindingType::Uniform,
-                        has_dynamic_offset: false,
-                        min_binding_size: None,
+                entries: &[
+                    wgpu::BindGroupLayoutEntry {
+                        binding: 0,
+                        visibility: wgpu::ShaderStages::COMPUTE,
+                        ty: wgpu::BindingType::Buffer {
+                            ty: wgpu::BufferBindingType::Uniform,
+                            has_dynamic_offset: false,
+                            min_binding_size: None,
+                        },
+                        count: None,
                     },
-                    count: None,
-                }],
+                    wgpu::BindGroupLayoutEntry {
+                        binding: 1,
+                        visibility: wgpu::ShaderStages::COMPUTE,
+                        ty: wgpu::BindingType::Texture {
+                            sample_type: wgpu::TextureSampleType::Float { filterable: true },
+                            view_dimension: wgpu::TextureViewDimension::D2,
+                            multisampled: false,
+                        },
+                        count: None,
+                    },
+                    wgpu::BindGroupLayoutEntry {
+                        binding: 2,
+                        visibility: wgpu::ShaderStages::COMPUTE,
+                        ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
+                        count: None,
+                    },
+                ],
             });
 
         let util_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
             label: Some("util_bind_data"),
             layout: &util_bind_group_layout,
-            entries: &[wgpu::BindGroupEntry {
-                binding: 0,
-                resource: util_buffer.as_entire_binding(),
-            }],
+            entries: &[
+                wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: util_buffer.as_entire_binding(),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 1,
+                    resource: wgpu::BindingResource::TextureView(&random_texture.view),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 2,
+                    resource: wgpu::BindingResource::Sampler(&random_texture.sampler),
+                },
+            ],
         });
 
         let compute_pipeline_layout =
@@ -309,6 +349,7 @@ impl State {
             render_bind_group,
             util_data,
             util_buffer,
+            random_texture,
         }
     }
 

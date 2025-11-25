@@ -11,6 +11,7 @@ use crate::{
 mod app;
 mod math;
 mod rt_core;
+mod texture;
 mod util;
 
 fn main() {

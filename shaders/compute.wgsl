@@ -1,5 +1,9 @@
 @group(0) @binding(0) var outputTex : texture_storage_2d<rgba8unorm, write>;
 @group(1) @binding(0) var<uniform> util : UtilData;
+@group(1) @binding(1)
+var random_texture: texture_2d<f32>;
+@group(1)@binding(2)
+var random_sampler: sampler;
 
 struct UtilData {
     time: u32,
@@ -91,31 +95,38 @@ fn sample_square(x: f32, y: f32) -> vec3<f32> {
     return vec3(random_float(x, y) - 0.5, random_float(y, x) - 0.5, 0.0);
 }
 
-fn get_ray(camera: Camera, i: u32, j: u32) -> Ray {
-    let offset = sample_square(f32(i),f32(j));
-    let pixel_sample = camera.image_center + camera.pixel_delta_u * (f32(i) + offset.x) + camera.pixel_delta_u * (f32(i) + offset.x);
-    let origin = vec3(0.0, 0.0, 0.0);
-    if(camera.defocus_angle <= 0.0) {
-        origin = camera.center;
-    } else {
-        origin = defocus_disk_sample(cmaera);
-    }
-    return Ray();
+// fn get_ray(camera: Camera, i: u32, j: u32) -> Ray {
+//     let offset = sample_square(f32(i),f32(j));
+//     let pixel_sample = camera.image_center + camera.pixel_delta_u * (f32(i) + offset.x) + camera.pixel_delta_u * (f32(i) + offset.x);
+//     let origin = vec3(0.0, 0.0, 0.0);
+//     if(camera.defocus_angle <= 0.0) {
+//         origin = camera.center;
+//     } else {
+//         origin = defocus_disk_sample(cmaera);
+//     }
+//     return Ray();
+// }
+
+fn get_pixel_color(pixel: vec2<f32>, camera: Camera) -> vec4<f32> {
+    return textureSampleLevel(random_texture, random_sampler, pixel, 0.0);
 }
 
 @compute @workgroup_size(8, 8)
 fn main(@builtin(global_invocation_id) id : vec3<u32>, @builtin(num_workgroups) size : vec3<u32>) {
     let camera = build_camera(size.x, size.y);
-    if (id.x >= size.x || id.y >= size.y) {
-        return;
-    }
+    // if (id.x >= size.x || id.y >= size.y) {
+    //     return;
+    // }
 
-    let color = vec4<f32>(
-        f32(id.x) / f32(size.x) * sin(f32(util.time) / 1000.0),
-        f32(id.y) / f32(size.y) * cos(f32(util.time) / 1000.0),
-        0.3,
-        1.0
-    );
+    // let color = vec4<f32>(
+    //     f32(id.x) / f32(size.x) * sin(f32(util.time) / 1000.0),
+    //     f32(id.y) / f32(size.y) * cos(f32(util.time) / 1000.0),
+    //     0.3,
+    //     1.0
+    // );
+    let pixel = vec2(f32(id.x)/f32(size.x), f32(id.y)/f32(size.y));
+
+    let color = get_pixel_color(pixel, camera);
 
     textureStore(outputTex, vec2<i32>(id.xy), color);
 }
