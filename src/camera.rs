@@ -1,12 +1,9 @@
-use std::{f32::consts, io::Write};
+use std::f32::consts;
 
 use crate::{
     math::Vec3,
     // rt_core::scene::{Hittable, Ray},
-    util::{linear_to_gamma, print_progress, sample_square},
 };
-
-pub type Color = Vec3;
 
 pub struct Camera {
     // aspect_ratio: f32,
@@ -194,10 +191,10 @@ impl Camera {
     //     Color::new(1.0, 1.0, 1.0).mul(1.0 - a) + Color::new(0.5, 0.7, 1.0).mul(a)
     // }
 
-    fn defocus_disk_sample(&self) -> Vec3 {
-        let vec = Vec3::random_in_unit_disk();
-        self.center.clone() + self.defocus_disk_u.mul(vec.x()) + self.defocus_disk_v.mul(vec.y())
-    }
+    // fn defocus_disk_sample(&self) -> Vec3 {
+    //     let vec = Vec3::random_in_unit_disk();
+    //     self.center.clone() + self.defocus_disk_u.mul(vec.x()) + self.defocus_disk_v.mul(vec.y())
+    // }
 }
 
 // fn write_color(file: &mut impl Write, pixel: Color) {

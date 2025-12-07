@@ -1,7 +1,7 @@
 use std::{
     iter,
     sync::Arc,
-    time::{Instant, SystemTime, UNIX_EPOCH},
+    time::{Duration, Instant, SystemTime, UNIX_EPOCH},
 };
 
 use wgpu::{
@@ -32,8 +32,8 @@ struct State {
     window_size: PhysicalSize<u32>,
     device: wgpu::Device,
     queue: wgpu::Queue,
-    camera: Camera,
-    camera_buffer: wgpu::Buffer,
+    _camera: Camera,
+    _camera_buffer: wgpu::Buffer,
     compute_pipeline: wgpu::ComputePipeline,
     compute_bind_group: wgpu::BindGroup,
     util_bind_group: wgpu::BindGroup,
@@ -42,6 +42,7 @@ struct State {
     util_buffer: wgpu::Buffer,
     util_data: UtilData,
     _random_texture: Texture,
+    fps_counter: FpsCounter,
 }
 
 struct UtilData {
@@ -69,6 +70,36 @@ impl UtilData {
         let mut bytes = [0u8; 16];
         bytes[0..4].copy_from_slice(&self.time.to_le_bytes());
         bytes
+    }
+}
+
+struct FpsCounter {
+    instant: Instant,
+    frames: i32,
+    fps: f32,
+}
+
+impl FpsCounter {
+    fn new() -> Self {
+        Self {
+            instant: Instant::now(),
+            frames: 0,
+            fps: 0.0,
+        }
+    }
+
+    fn update(&mut self) {
+        self.frames += 1;
+        let elapsed = self.instant.elapsed();
+        if elapsed >= Duration::from_millis(1000) {
+            self.fps = self.frames as f32 / elapsed.as_secs() as f32;
+            self.frames = 0;
+            self.instant = Instant::now();
+        }
+    }
+
+    const fn fps(&self) -> f32 {
+        self.fps
     }
 }
 
@@ -381,8 +412,8 @@ impl State {
             window_size,
             device,
             queue,
-            camera,
-            camera_buffer,
+            _camera: camera,
+            _camera_buffer: camera_buffer,
             compute_pipeline,
             compute_bind_group,
             util_bind_group,
@@ -391,11 +422,13 @@ impl State {
             util_data,
             util_buffer,
             _random_texture: random_texture,
+            fps_counter: FpsCounter::new(),
         }
     }
 
     fn update(&mut self) {
         self.util_data.update();
+        self.fps_counter.update();
         self.queue
             .write_buffer(&self.util_buffer, 0, &self.util_data.to_bytes());
     }
@@ -477,13 +510,11 @@ impl ApplicationHandler for RayTracer {
                 event_loop.exit();
             }
             WindowEvent::RedrawRequested => {
-                let instant = Instant::now();
                 if let Some(state) = &mut self.state {
                     state.update();
                     state.render();
+                    println!("FPS: {}", state.fps_counter.fps());
                 }
-                println!("{:?}", instant.elapsed());
-                // self.window.as_ref().unwrap().request_redraw();
             }
             _ => (),
         }

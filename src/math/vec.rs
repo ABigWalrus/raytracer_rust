@@ -12,6 +12,7 @@ impl Vec3 {
         Self { value: [x, y, z] }
     }
 
+    #[allow(unused)]
     pub fn zero() -> Self {
         Self { value: [0.0; 3] }
     }
@@ -44,6 +45,7 @@ impl Vec3 {
         Self::new(self.x() * scalar, self.y() * scalar, self.z() * scalar)
     }
 
+    #[allow(unused)]
     pub fn dot(&self, other: &Self) -> f32 {
         self.x() * other.x() + self.y() * other.y() + self.z() * other.z()
     }
@@ -64,6 +66,7 @@ impl Vec3 {
     //     Self::new(random_float(), random_float(), random_float())
     // }
 
+    #[allow(unused)]
     pub fn random_range(min: f32, max: f32) -> Self {
         Self::new(
             random_float_range(min, max),
@@ -72,6 +75,7 @@ impl Vec3 {
         )
     }
 
+    #[allow(unused)]
     pub fn random_unit() -> Self {
         loop {
             let vec = Vec3::random_range(-1.0, 1.0);
@@ -87,15 +91,18 @@ impl Vec3 {
     //     if vec.dot(normal) >= 0.0 { vec } else { -vec }
     // }
 
+    #[allow(unused)]
     pub fn near_zero(&self) -> bool {
         let s = 1e-8;
         self.x().abs() < s && self.y().abs() < s && self.z().abs() < s
     }
 
+    #[allow(unused)]
     pub fn reflect(&self, normal: &Vec3) -> Self {
         self.clone() - normal.mul(self.dot(&normal) * 2.0)
     }
 
+    #[allow(unused)]
     pub fn refract(&self, normal: &Vec3, factor: f32) -> Self {
         let cos_theta = f32::min((-self.clone()).dot(normal), 1.0);
         let out_perp = (self.clone() + normal.mul(cos_theta)).mul(factor);
@@ -104,6 +111,7 @@ impl Vec3 {
         out_perp + out_parallel
     }
 
+    #[allow(unused)]
     pub fn random_in_unit_disk() -> Self {
         loop {
             let vec = Vec3::new(
