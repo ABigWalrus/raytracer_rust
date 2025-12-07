@@ -1,16 +1,15 @@
-use std::{fs::File, time::Instant};
-
 use winit::event_loop::{ControlFlow, EventLoop};
 
 use crate::{
     app::RayTracer,
-    math::Vec3,
-    rt_core::{Camera, Color, Dielectric, HittableList, Lambertian, Metal, Sphere},
+    // math::Vec3,
+    // rt_core::{Camera, Color, Dielectric, HittableList, Lambertian, Metal, Sphere},
 };
 
 mod app;
 mod math;
-mod rt_core;
+// mod rt_core;
+mod camera;
 mod texture;
 mod util;
 
@@ -89,5 +88,5 @@ fn main() {
 
     let mut ray_tracer = RayTracer::new();
 
-    event_loop.run_app(&mut ray_tracer);
+    let _ = event_loop.run_app(&mut ray_tracer);
 }

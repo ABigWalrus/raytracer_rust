@@ -1,9 +1,8 @@
 use anyhow::*;
 use image::{GenericImageView, ImageReader};
-use wgpu::wgc::device::queue;
 
 pub struct Texture {
-    pub texture: wgpu::Texture,
+    pub _texture: wgpu::Texture,
     pub view: wgpu::TextureView,
     pub sampler: wgpu::Sampler,
 }
@@ -71,7 +70,7 @@ impl Texture {
         });
 
         Ok(Self {
-            texture,
+            _texture: texture,
             view,
             sampler,
         })

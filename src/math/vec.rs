@@ -4,11 +4,11 @@ use crate::util::random_float_range;
 
 #[derive(Clone)]
 pub struct Vec3 {
-    value: [f64; 3],
+    value: [f32; 3],
 }
 
 impl Vec3 {
-    pub fn new(x: f64, y: f64, z: f64) -> Self {
+    pub fn new(x: f32, y: f32, z: f32) -> Self {
         Self { value: [x, y, z] }
     }
 
@@ -16,35 +16,35 @@ impl Vec3 {
         Self { value: [0.0; 3] }
     }
 
-    pub const fn x(&self) -> f64 {
+    pub const fn x(&self) -> f32 {
         self.value[0]
     }
 
-    pub const fn y(&self) -> f64 {
+    pub const fn y(&self) -> f32 {
         self.value[1]
     }
 
-    pub const fn z(&self) -> f64 {
+    pub const fn z(&self) -> f32 {
         self.value[2]
     }
 
-    pub fn length_squared(&self) -> f64 {
+    pub fn length_squared(&self) -> f32 {
         self.x() * self.x() + self.y() * self.y() + self.z() * self.z()
     }
 
-    pub fn length(&self) -> f64 {
-        f64::sqrt(self.length_squared())
+    pub fn length(&self) -> f32 {
+        f32::sqrt(self.length_squared())
     }
 
-    pub fn div(&self, scalar: f64) -> Self {
+    pub fn div(&self, scalar: f32) -> Self {
         Self::new(self.x() / scalar, self.y() / scalar, self.z() / scalar)
     }
 
-    pub fn mul(&self, scalar: f64) -> Self {
+    pub fn mul(&self, scalar: f32) -> Self {
         Self::new(self.x() * scalar, self.y() * scalar, self.z() * scalar)
     }
 
-    pub fn dot(&self, other: &Self) -> f64 {
+    pub fn dot(&self, other: &Self) -> f32 {
         self.x() * other.x() + self.y() * other.y() + self.z() * other.z()
     }
 
@@ -64,7 +64,7 @@ impl Vec3 {
     //     Self::new(random_float(), random_float(), random_float())
     // }
 
-    pub fn random_range(min: f64, max: f64) -> Self {
+    pub fn random_range(min: f32, max: f32) -> Self {
         Self::new(
             random_float_range(min, max),
             random_float_range(min, max),
@@ -77,7 +77,7 @@ impl Vec3 {
             let vec = Vec3::random_range(-1.0, 1.0);
             let lensq = vec.length_squared();
             if lensq >= 1e-160 && lensq <= 1.0 {
-                return vec.div(f64::sqrt(lensq));
+                return vec.div(f32::sqrt(lensq));
             }
         }
     }
@@ -96,10 +96,10 @@ impl Vec3 {
         self.clone() - normal.mul(self.dot(&normal) * 2.0)
     }
 
-    pub fn refract(&self, normal: &Vec3, factor: f64) -> Self {
-        let cos_theta = f64::min((-self.clone()).dot(normal), 1.0);
+    pub fn refract(&self, normal: &Vec3, factor: f32) -> Self {
+        let cos_theta = f32::min((-self.clone()).dot(normal), 1.0);
         let out_perp = (self.clone() + normal.mul(cos_theta)).mul(factor);
-        let out_parallel = normal.mul(-f64::sqrt((1.0 - out_perp.length_squared()).abs()));
+        let out_parallel = normal.mul(-f32::sqrt((1.0 - out_perp.length_squared()).abs()));
 
         out_perp + out_parallel
     }
@@ -115,6 +115,14 @@ impl Vec3 {
                 return vec;
             }
         }
+    }
+
+    pub fn to_bytes(&self) -> [u8; 16] {
+        let mut bytes = [0u8; 16];
+        bytes[0..4].copy_from_slice(&self.value[0].to_le_bytes());
+        bytes[4..8].copy_from_slice(&self.value[1].to_le_bytes());
+        bytes[8..12].copy_from_slice(&self.value[2].to_le_bytes());
+        bytes
     }
 }
 

@@ -5,15 +5,16 @@ use std::{
 };
 
 use wgpu::{
-    SurfaceTexture,
-    util::{self, DeviceExt},
-    wgc::device::queue,
+    // SurfaceTexture,
+    util::DeviceExt,
+    // wgc::device::queue,
+    // wgt::instance,
 };
 use winit::{
     application::ApplicationHandler, dpi::PhysicalSize, event::WindowEvent, window::Window,
 };
 
-use crate::texture::Texture;
+use crate::{camera::Camera, math::Vec3, texture::Texture};
 
 pub struct RayTracer {
     state: Option<State>,
@@ -31,6 +32,8 @@ struct State {
     window_size: PhysicalSize<u32>,
     device: wgpu::Device,
     queue: wgpu::Queue,
+    camera: Camera,
+    camera_buffer: wgpu::Buffer,
     compute_pipeline: wgpu::ComputePipeline,
     compute_bind_group: wgpu::BindGroup,
     util_bind_group: wgpu::BindGroup,
@@ -38,7 +41,7 @@ struct State {
     render_bind_group: wgpu::BindGroup,
     util_buffer: wgpu::Buffer,
     util_data: UtilData,
-    random_texture: Texture,
+    _random_texture: Texture,
 }
 
 struct UtilData {
@@ -130,6 +133,9 @@ impl State {
 
         surface.configure(&device, &config);
 
+        let compute_shader =
+            device.create_shader_module(wgpu::include_wgsl!("../shaders/compute.wgsl"));
+
         // Texture that will be used to render results of compute shader
         let render_texture = device.create_texture(&wgpu::wgt::TextureDescriptor {
             label: Some("render_texture"),
@@ -149,31 +155,64 @@ impl State {
         let texture_view = render_texture.create_view(&wgpu::wgt::TextureViewDescriptor::default());
         let sampler = device.create_sampler(&wgpu::wgt::SamplerDescriptor::default());
 
-        let compute_shader =
-            device.create_shader_module(wgpu::include_wgsl!("../shaders/compute.wgsl"));
+        let camera = Camera::build(
+            window_size.width,
+            window_size.height,
+            20.0,
+            Vec3::new(0.0, 0.0, 10.0),
+            Vec3::new(0.0, 0.0, 0.0),
+            10,
+            50,
+            0.6,
+            10.0,
+        );
+
+        let camera_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("camera_buffer"),
+            contents: &camera.to_bytes(),
+            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+        });
 
         let compute_bind_group_layot =
             device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
                 label: Some("compute_bg_layout"),
-                entries: &[wgpu::BindGroupLayoutEntry {
-                    binding: 0,
-                    visibility: wgpu::ShaderStages::COMPUTE,
-                    ty: wgpu::BindingType::StorageTexture {
-                        access: wgpu::StorageTextureAccess::WriteOnly,
-                        format: wgpu::TextureFormat::Rgba8Unorm,
-                        view_dimension: wgpu::TextureViewDimension::D2,
+                entries: &[
+                    wgpu::BindGroupLayoutEntry {
+                        binding: 0,
+                        visibility: wgpu::ShaderStages::COMPUTE,
+                        ty: wgpu::BindingType::StorageTexture {
+                            access: wgpu::StorageTextureAccess::WriteOnly,
+                            format: wgpu::TextureFormat::Rgba8Unorm,
+                            view_dimension: wgpu::TextureViewDimension::D2,
+                        },
+                        count: None,
                     },
-                    count: None,
-                }],
+                    wgpu::BindGroupLayoutEntry {
+                        binding: 1,
+                        visibility: wgpu::ShaderStages::COMPUTE,
+                        ty: wgpu::BindingType::Buffer {
+                            ty: wgpu::BufferBindingType::Uniform,
+                            has_dynamic_offset: false,
+                            min_binding_size: None,
+                        },
+                        count: None,
+                    },
+                ],
             });
 
         let compute_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
             label: Some("compute_bg"),
             layout: &compute_bind_group_layot,
-            entries: &[wgpu::BindGroupEntry {
-                binding: 0,
-                resource: wgpu::BindingResource::TextureView(&texture_view),
-            }],
+            entries: &[
+                wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: wgpu::BindingResource::TextureView(&texture_view),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 1,
+                    resource: camera_buffer.as_entire_binding(),
+                },
+            ],
         });
 
         let util_data = UtilData::new();
@@ -185,7 +224,7 @@ impl State {
                 usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
             });
 
-        let bytes = include_bytes!("../assets/textures/random_noise.png");
+        // let bytes = include_bytes!("../assets/textures/random_noise.png");
         let random_texture = Texture::from_image(
             "./assets/textures/random_noise.png",
             "random_noise",
@@ -342,6 +381,8 @@ impl State {
             window_size,
             device,
             queue,
+            camera,
+            camera_buffer,
             compute_pipeline,
             compute_bind_group,
             util_bind_group,
@@ -349,7 +390,7 @@ impl State {
             render_bind_group,
             util_data,
             util_buffer,
-            random_texture,
+            _random_texture: random_texture,
         }
     }
 
@@ -361,7 +402,11 @@ impl State {
 
     fn render(&self) {
         self.window.request_redraw();
-        let frame = self.surface.get_current_texture().unwrap();
+        let frame = self.surface.get_current_texture();
+        if frame.is_err() {
+            return;
+        }
+        let frame = frame.unwrap();
         let view = frame.texture.create_view(&Default::default());
 
         let mut encoder =
@@ -423,7 +468,7 @@ impl ApplicationHandler for RayTracer {
     fn window_event(
         &mut self,
         event_loop: &winit::event_loop::ActiveEventLoop,
-        window_id: winit::window::WindowId,
+        _window_id: winit::window::WindowId,
         event: winit::event::WindowEvent,
     ) {
         match event {
@@ -432,10 +477,12 @@ impl ApplicationHandler for RayTracer {
                 event_loop.exit();
             }
             WindowEvent::RedrawRequested => {
+                let instant = Instant::now();
                 if let Some(state) = &mut self.state {
                     state.update();
                     state.render();
                 }
+                println!("{:?}", instant.elapsed());
                 // self.window.as_ref().unwrap().request_redraw();
             }
             _ => (),
