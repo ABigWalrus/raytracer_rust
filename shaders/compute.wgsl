@@ -35,13 +35,32 @@ const RANDOM_IMAGE_HEIGHT = 64;
 
 const SKY_COLOR = vec3(0.5, 0.7, 1.0);
 
-fn sky_color(screen: vec2<f32>) -> vec3<f32> {
+struct Ray {
+    origin: vec3<f32>,
+    dir: vec3<f32>,
+}
 
-    return screen.y * vec3(0.5, 0.7, 1.0);
+fn ray_at(ray: Ray, t: f32) -> vec3<f32> {
+    return ray.origin + t * ray.dir;
+}
+
+fn get_ray(uv: vec2<f32>) -> Ray {
+    let pixel_center = camera.image_center + 
+        camera.pixel_delta_u * uv.x + 
+        camera.pixel_delta_v * uv.y;
+
+    let dir = pixel_center - camera.center;
+
+    return Ray(camera.center, dir);
+}
+
+fn sky_color(uv: vec2<f32>) -> vec3<f32> {
+    return uv.y * SKY_COLOR;
 }
 
 fn get_color(uv: vec2<f32>) -> vec4<f32> {
-    return vec4(sky_color(uv), 1.0);
+    let ray = get_ray(uv);
+    return vec4(ray.origin, 1.0);
     // var current_ray = get_ray(x, y);
     // var hit = false;
     // if current_ray
