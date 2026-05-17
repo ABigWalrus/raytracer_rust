@@ -60,6 +60,11 @@ struct Sphere {
     color: vec3<f32>,
 }
 
+struct HitResult {
+    hit: bool,
+    t: f32,
+}
+
 struct Ray {
     origin: vec3<f32>,
     dir: vec3<f32>,
@@ -83,7 +88,7 @@ fn sky_color(uv: vec2<f32>) -> vec3<f32> {
     return uv.y * SKY_COLOR;
 }
 
-fn hit_sphere(ray: Ray) -> vec2<i32> {
+fn hit_sphere(ray: Ray) -> HitResult {
     for (var i = 0; i < SPHERES_COUNT; i++) {
         let sphere: Sphere = SPHERES[i];
 
@@ -96,18 +101,22 @@ fn hit_sphere(ray: Ray) -> vec2<i32> {
         let discr = b * b - 4.0 * a * c;
 
         if discr >= 0.0 {
-            return vec2(1, i);
+            return HitResult(
+                true,
+                (-b - sqrt(discr)) / (2.0 * a),
+            );
         }
     }
 
-    return vec2(0);
+    return HitResult(false, 0.0);
 }
 
 fn get_color(ray: Ray) -> vec4<f32> {
     let result = hit_sphere(ray);
 
-    if result.x > 0 {
-        return vec4(SPHERES[result.y].color, 1.0);
+    if result.hit {
+        let normal = normalize(ray_at(ray, result.t) - vec3(0.0, 0.0, -1.0));
+        return vec4(normal, 1.0);
     }
 
     return vec4(SKY_COLOR, 1.0);
