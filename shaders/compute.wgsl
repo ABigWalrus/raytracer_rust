@@ -35,18 +35,18 @@ const RANDOM_IMAGE_HEIGHT = 64;
 
 const SKY_COLOR = vec3(0.5, 0.7, 1.0);
 
-const SPHERES_COUNT = 1;
+const SPHERES_COUNT = 2;
 
 const SPHERES = array<Sphere, SPHERES_COUNT>(
     Sphere( // Ground
-        vec3(0.0, 0.0, 10.0),
-        3.0,
+        vec3(0.0, 0.0, -1.0),
+        0.5,
         vec3(1.0, 0.0, 0.0)),
-    // Sphere(
-    //     vec3(0.0, 1.0, 0.0),
-    //     0.2,
-    //     vec3(0.0, 1.0, 0.0),
-    // ),
+    Sphere(
+        vec3(0.0, -1.0, -1.0),
+        0.5,
+        vec3(0.0, 1.0, 0.0),
+    ),
     // Sphere(
     //     vec3(-4.0, 1.0, 0.0),
     //     1.0,
@@ -62,7 +62,8 @@ struct Sphere {
 
 struct HitResult {
     hit: bool,
-    t: f32,
+    normal: vec3<f32>,
+    collision: vec3<f32>,
 }
 
 struct Ray {
@@ -101,25 +102,43 @@ fn hit_sphere(ray: Ray) -> HitResult {
         let discr = b * b - 4.0 * a * c;
 
         if discr >= 0.0 {
+            let t = (-b - sqrt(discr)) / (2.0 * a);
+            let collision = ray_at(ray, t);
+            let normal = normalize(collision - sphere.center);
             return HitResult(
                 true,
-                (-b - sqrt(discr)) / (2.0 * a),
+                normal,
+                collision,
             );
         }
     }
 
-    return HitResult(false, 0.0);
+    return HitResult(false, vec3(0.0), vec3(0.0));
 }
 
 fn get_color(ray: Ray) -> vec4<f32> {
-    let result = hit_sphere(ray);
+    var current_ray = ray;
+    let max_bounce = 10;
+    var count = 0;
 
-    if result.hit {
-        let normal = normalize(ray_at(ray, result.t) - vec3(0.0, 0.0, -1.0));
-        return vec4(normal, 1.0);
+    while count < max_bounce {
+        let result = hit_sphere(current_ray);
+        if !result.hit {
+            break;
+        }
+        count++;
+        let epsilon = 0.1;
+
+        current_ray = Ray(result.collision + (result.normal * epsilon), reflect(current_ray.dir, result.normal));
+        // current_ray = Ray(result.collision + (result.normal * epsilon), refract(current_ray.dir, result.normal, 1.5));
     }
 
-    return vec4(SKY_COLOR, 1.0);
+    if count == 0 {
+        return vec4(SKY_COLOR, 1.0);
+    }
+
+    return vec4(vec3(f32(count) / f32(max_bounce)), 1.0);
+
     // var current_ray = get_ray(x, y);
     // var hit = false;
     // if current_ray
@@ -152,11 +171,11 @@ fn main(@builtin(global_invocation_id) invocation_id: vec3<u32>, @builtin(num_wo
 
     let focal_length = 1.0;
     let viewport_height = 2.0;
-    let viewport_width = viewport_height / aspect_ratio;
+    let viewport_width = viewport_height * aspect_ratio;
     let camera_center = vec3(0.0);
 
     let viewport_u = vec3(viewport_width, 0.0, 0.0);
-    let viewport_v = vec3(0.0, -viewport_width, 0.0);
+    let viewport_v = vec3(0.0, -viewport_height, 0.0);
 
     let pixel_delta_u = viewport_u / f32(workgroup_size.x);
     let pixel_delta_v = viewport_v / f32(workgroup_size.y);

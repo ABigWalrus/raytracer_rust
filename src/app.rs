@@ -516,6 +516,11 @@ impl ApplicationHandler for RayTracer {
                     println!("FPS: {}", state.fps_counter.fps());
                 }
             }
+            WindowEvent::Resized(new_size) => {
+                if let Some(state) = &mut self.state {
+                    state.window_size = new_size;
+                }
+            }
             _ => (),
         }
     }
