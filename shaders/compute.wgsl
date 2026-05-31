@@ -64,6 +64,7 @@ struct HitResult {
     hit: bool,
     normal: vec3<f32>,
     collision: vec3<f32>,
+    color: vec3<f32>,
 }
 
 struct Ray {
@@ -109,35 +110,39 @@ fn hit_sphere(ray: Ray) -> HitResult {
                 true,
                 normal,
                 collision,
+                sphere.color
             );
         }
     }
 
-    return HitResult(false, vec3(0.0), vec3(0.0));
+    return HitResult(false, vec3(0.0), vec3(0.0), vec3(0.0));
 }
 
 fn get_color(ray: Ray) -> vec4<f32> {
     var current_ray = ray;
     let max_bounce = 10;
     var count = 0;
+    var acc_color = vec3(0.0);
 
     while count < max_bounce {
         let result = hit_sphere(current_ray);
+        count++;
         if !result.hit {
+            acc_color += SKY_COLOR;
             break;
         }
-        count++;
         let epsilon = 0.1;
+        acc_color += result.color;
 
-        current_ray = Ray(result.collision + (result.normal * epsilon), reflect(current_ray.dir, result.normal));
-        // current_ray = Ray(result.collision + (result.normal * epsilon), refract(current_ray.dir, result.normal, 1.5));
+        // current_ray = Ray(result.collision + (result.normal * epsilon), reflect(current_ray.dir, result.normal));
+        current_ray = Ray(result.collision + (result.normal * epsilon), refract(current_ray.dir, result.normal, 1.5));
     }
 
-    if count == 0 {
-        return vec4(SKY_COLOR, 1.0);
-    }
+    // if count == 0 {
+    //     return vec4(SKY_COLOR, 1.0);
+    // }
 
-    return vec4(vec3(f32(count) / f32(max_bounce)), 1.0);
+    return vec4(acc_color / f32(count), 1.0);
 
     // var current_ray = get_ray(x, y);
     // var hit = false;
