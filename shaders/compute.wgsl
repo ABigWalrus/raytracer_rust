@@ -43,8 +43,8 @@ const SPHERES = array<Sphere, SPHERES_COUNT>(
         0.5,
         vec3(1.0, 0.0, 0.0)),
     Sphere(
-        vec3(0.0, -1.0, -1.0),
-        0.5,
+        vec3(0.0, -3.0, -2.0),
+        2.5,
         vec3(0.0, 1.0, 0.0),
     ),
     // Sphere(
@@ -91,28 +91,38 @@ fn sky_color(uv: vec2<f32>) -> vec3<f32> {
 }
 
 fn hit_sphere(ray: Ray) -> HitResult {
+    var closest_t = 9999.9;
+    var closest_i = 0;
     for (var i = 0; i < SPHERES_COUNT; i++) {
         let sphere: Sphere = SPHERES[i];
 
-        let oc = sphere.center - ray.origin;
-
+        let oc = ray.origin - sphere.center;
         let a = dot(ray.dir, ray.dir);
-        let b = -2.0 * dot(ray.dir, oc);
+        let half_b = dot(oc, ray.dir);
         let c = dot(oc, oc) - sphere.radius * sphere.radius;
 
-        let discr = b * b - 4.0 * a * c;
+        let discriminant = half_b * half_b - a * c;
 
-        if discr >= 0.0 {
-            let t = (-b - sqrt(discr)) / (2.0 * a);
-            let collision = ray_at(ray, t);
-            let normal = normalize(collision - sphere.center);
-            return HitResult(
-                true,
-                normal,
-                collision,
-                sphere.color
-            );
+        if discriminant >= 0.0 {
+            let sqrtd = sqrt(discriminant);
+            var t = (-half_b - sqrtd) / a;
+
+            if t < 0.001 {
+                t = (-half_b + sqrtd) / a;
+            }
+
+            if t >= 0.001 && t < closest_t {
+                closest_t = t;
+                closest_i = i;
+            }
         }
+    }
+
+    if closest_t < 9999.9 {
+        let sphere = SPHERES[closest_i];
+        let collision = ray_at(ray, closest_t);
+        let normal = normalize(collision - sphere.center);
+        return HitResult(true, normal, collision, sphere.color);
     }
 
     return HitResult(false, vec3(0.0), vec3(0.0), vec3(0.0));
@@ -134,40 +144,11 @@ fn get_color(ray: Ray) -> vec4<f32> {
         let epsilon = 0.1;
         acc_color += result.color;
 
-        // current_ray = Ray(result.collision + (result.normal * epsilon), reflect(current_ray.dir, result.normal));
-        current_ray = Ray(result.collision + (result.normal * epsilon), refract(current_ray.dir, result.normal, 1.5));
+        current_ray = Ray(result.collision + (result.normal * epsilon), reflect(current_ray.dir, result.normal));
+        // current_ray = Ray(result.collision + (result.normal * epsilon), refract(current_ray.dir, result.normal, 1.5));
     }
 
-    // if count == 0 {
-    //     return vec4(SKY_COLOR, 1.0);
-    // }
-
     return vec4(acc_color / f32(count), 1.0);
-
-    // var current_ray = get_ray(x, y);
-    // var hit = false;
-    // if current_ray
-    // var color = vec3(1.0, 1.0, 1.0);
-
-    // for(var i = 0; i < 1000; i++) {
-    //     let record = hit_world(current_ray, 0.001, 100);
-    //     if (record.hit) {
-    //         let scatter = normalize(record.normal + random_unit_vec3());
-    //         current_ray = Ray(record.point, scatter);
-    //         color *= vec3(0.5, 0.0, 0.0);
-    //         hit = true;
-    //         // return vec3(1.0, 0.0, 0.0);
-    //     } else {
-    //         color *= sky_color();
-    //         break;
-    //     }
-    // }
-
-    // if (!hit) {
-    //     return sky_color();
-    // } else {
-    //     return color;
-    // }
 }
 
 @compute @workgroup_size(8, 8)
@@ -190,7 +171,7 @@ fn main(@builtin(global_invocation_id) invocation_id: vec3<u32>, @builtin(num_wo
 
     // let uv = vec2(f32(invocation_id.x) / f32(workgroup_size.x), 1.0 - f32(invocation_id.y) / f32(workgroup_size.y));
     let pixel_center = pixel00_loc + f32(invocation_id.x) * pixel_delta_u + f32(invocation_id.y) * pixel_delta_v;
-    let ray_direction = pixel_center - camera_center;
+    let ray_direction = normalize(pixel_center - camera_center);
     let color = get_color(Ray(camera_center, ray_direction));
 
     textureStore(outputTex, vec2<i32>(invocation_id.xy), color);
