@@ -54,6 +54,23 @@ fn random_vec3(p: vec2<f32>) -> vec3<f32> {
     return normalize(vec3(rx, ry, rz) * 2.0 - 1.0);
 }
 
+fn next_random(state: ptr<function, u32>) -> f32 {
+    *state = *state * 1664525u + 1013904223u;
+    return f32(*state) / 4294967296.0;
+}
+
+// Generates a perfectly uniform random unit vector on a sphere surface (Archimedes' Method)
+fn random_unit_vec3(rng: ptr<function, u32>) -> vec3<f32> {
+    let r1 = next_random(rng);
+    let r2 = next_random(rng);
+
+    let phi = r1 * 6.283185307179586; // 2 * PI
+    let z = r2 * 2.0 - 1.0;           // Height distribution from [-1, 1]
+    let r_xy = sqrt(max(0.0, 1.0 - z * z));
+
+    return vec3<f32>(r_xy * cos(phi), r_xy * sin(phi), z);
+}
+
 fn random_on_hemisphere(normal: vec3<f32>, uv: vec2<f32>) -> vec3<f32> {
     let random = random_vec3(uv);
     if dot(random, normal) > 0.0 {
@@ -128,7 +145,7 @@ struct MetallicMaterial {
 
 const METALLIC_MATERIALS = array<MetallicMaterial, 2>(
     MetallicMaterial(
-        vec3(0.8, 0.8, 0.8), 0.3,
+        vec3(0.8, 0.8, 0.8), 0.0,
     ),
     MetallicMaterial(
         vec3(0.8, 0.6, 0.2), 1.0,
@@ -204,12 +221,13 @@ fn hit_sphere(ray: Ray) -> HitResult {
     return HitResult(false, vec3(0.0), vec3(0.0), vec2(0));
 }
 
-fn get_color(ray: Ray, invocation_id: vec2<f32>) -> vec4<f32> {
+fn get_color(ray: Ray, invocation_id: vec2<u32>, sample_id: i32) -> vec3<f32> {
     var current_ray = ray;
     let max_bounce = 10;
     var bounce = 0;
     var attenuation = vec3(1.0, 1.0, 1.0);
     let gamma = 0.2;
+    var rng_state = invocation_id.x * 3128u + invocation_id.y * 9213u + u32(sample_id) * 984711u;
     while bounce <= max_bounce {
         let result = hit_sphere(current_ray);
         if result.hit {
@@ -218,9 +236,9 @@ fn get_color(ray: Ray, invocation_id: vec2<f32>) -> vec4<f32> {
 
                 let material = DIFFUSE_MATERIALS[result.material.y];
 
-                // let random_seed = invocation_id * vec2<f32>(f32(bounce) * 7.13, f32(bounce) * 4.18);
-                // let dir = normalize(result.normal + random_vec3(random_seed));
-                let dir = normalize(result.normal + random_vec3(result.collision.xy));
+                // let random_rng_state = invocation_id * vec2<f32>(f32(bounce) * 7.13, f32(bounce) * 4.18);
+                // let dir = normalize(result.normal + random_vec3(random_rng_state));
+                let dir = normalize(result.normal + random_unit_vec3(&rng_state));
 
                 let epsilon = 0.001;
                 current_ray = Ray(result.collision + epsilon * result.normal, dir);
@@ -232,7 +250,7 @@ fn get_color(ray: Ray, invocation_id: vec2<f32>) -> vec4<f32> {
                 let material = METALLIC_MATERIALS[result.material.y];
 
                 let reflected = reflect(current_ray.dir, result.normal);
-                let dir = normalize(reflected) + material.fuzz * random_vec3(result.collision.xz);
+                let dir = normalize(reflected) + material.fuzz * random_unit_vec3(&rng_state);
 
                 let epsilon = 0.001;
                 current_ray = Ray(result.collision + epsilon * result.normal, dir);
@@ -251,7 +269,7 @@ fn get_color(ray: Ray, invocation_id: vec2<f32>) -> vec4<f32> {
         attenuation *= sky_color(current_ray.dir);
     }
 
-    return vec4(attenuation, 1.0);
+    return attenuation;
 }
 
 @compute @workgroup_size(1, 1)
@@ -271,15 +289,25 @@ fn main(@builtin(global_invocation_id) invocation_id: vec3<u32>, @builtin(num_wo
     let pixel_delta_u = viewport_u / f32(texture_dimensions.x);
     let pixel_delta_v = viewport_v / f32(texture_dimensions.y);
 
+    let samples = 16;
+    var rng_state = invocation_id.x * 19347u + invocation_id.y * 8795u;
+    var aggregated_color = vec3(0.0);
+
     let viewport_upper_left = camera_center - vec3(0.0, 0.0, focal_length) - viewport_u / 2.0 - viewport_v / 2.0;
     let pixel00_loc = viewport_upper_left + 0.5 * (pixel_delta_u + pixel_delta_v);
 
-    // let uv = vec2(f32(invocation_id.x) / f32(workgroup_size.x), 1.0 - f32(invocation_id.y) / f32(workgroup_size.y));
-    let pixel_center = pixel00_loc + f32(invocation_id.x) * pixel_delta_u + f32(invocation_id.y) * pixel_delta_v;
-    let ray_direction = normalize(pixel_center - camera_center);
-    let color = get_color(Ray(camera_center, ray_direction), vec2<f32>(invocation_id.xy));
+    for (var sample_id = 0; sample_id < samples; sample_id++) {
+        let random_sample = random_unit_vec3(& rng_state).xy * 0.5;
 
-    textureStore(outputTex, vec2<i32>(invocation_id.xy), color);
+        let pixel_center = pixel00_loc + (f32(invocation_id.x) + random_sample.x) * pixel_delta_u + (f32(invocation_id.y) + random_sample.y) * pixel_delta_v;
+
+        let ray_direction = normalize(pixel_center - camera_center);
+        aggregated_color += get_color(Ray(camera_center, ray_direction), invocation_id.xy, sample_id);
+    }
+
+    // let uv = vec2(f32(invocation_id.x) / f32(workgroup_size.x), 1.0 - f32(invocation_id.y) / f32(workgroup_size.y));
+
+    textureStore(outputTex, vec2<i32>(invocation_id.xy), vec4(aggregated_color / f32(samples), 1.0));
 }
 
 
