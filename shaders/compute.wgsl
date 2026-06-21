@@ -86,9 +86,9 @@ fn vec2_to_uv(vec: vec2<f32>) -> vec2<f32> {
 
 const SKY_COLOR = vec3(0.5, 0.7, 1.0);
 
-const SPHERES_COUNT = 4;
+const SPHERES_COUNT = 5;
 
-const SPHERES = array<Sphere, 4>(
+const SPHERES = array<Sphere, 5>(
     Sphere(
         vec3(0.0, -100.5, -1.0),
         100,
@@ -104,8 +104,14 @@ const SPHERES = array<Sphere, 4>(
     Sphere(
         vec3(-1.0, 0.0, -1.0),
         0.5,
-        vec2(1,
+        vec2(2,
             0)
+    ),
+    Sphere(
+        vec3(-1.0, 0.0, -1.0),
+        0.4,
+        vec2(2,
+            1)
     ),
     Sphere(
         vec3(1.0, 0.0, -1.0),
@@ -113,6 +119,7 @@ const SPHERES = array<Sphere, 4>(
         vec2(1,
             1)
     ),
+
     // Sphere(
     //     vec3(-4.0, 1.0, 0.0),
     //     1.0,
@@ -148,8 +155,21 @@ const METALLIC_MATERIALS = array<MetallicMaterial, 2>(
         vec3(0.8, 0.8, 0.8), 0.0,
     ),
     MetallicMaterial(
-        vec3(0.8, 0.6, 0.2), 1.0,
+        vec3(0.8, 0.6, 0.2), 0.0,
     )
+);
+
+struct DielectricMaterial {
+    refraction_index: f32,
+}
+
+const DIELECTRIC_MATERIALS = array<DielectricMaterial, 2>(
+    DielectricMaterial(
+        1.5,
+    ),
+    DielectricMaterial(
+        1.0 / 1.5,
+    ),
 );
 
 struct HitResult {
@@ -157,6 +177,7 @@ struct HitResult {
     normal: vec3<f32>,
     collision: vec3<f32>,
     material: vec2<u32>,
+    front_face: bool,
 }
 
 struct Ray {
@@ -214,11 +235,23 @@ fn hit_sphere(ray: Ray) -> HitResult {
     if closest_t < 9999.9 {
         let sphere = SPHERES[closest_i];
         let collision = ray_at(ray, closest_t);
-        let normal = normalize(collision - sphere.center);
-        return HitResult(true, normal, collision, sphere.material);
+
+        var normal = (collision - sphere.center) / sphere.radius;
+        let front_face = dot(ray.dir, normal) < 0.0;
+        if !front_face {
+            normal *= -1.0;
+        }
+
+        return HitResult(true, normal, collision, sphere.material, front_face);
     }
 
-    return HitResult(false, vec3(0.0), vec3(0.0), vec2(0));
+    return HitResult(false, vec3(0.0), vec3(0.0), vec2(0), false);
+}
+
+fn reflectance(cos_theta: f32, refraction_index: f32) -> f32 {
+    let r0 = (1 - refraction_index) / (1 + refraction_index);
+    let r00 = r0 * r0;
+    return r00 + (1.0 - r00) * pow((1.0 - cos_theta), 5.0);
 }
 
 fn get_color(ray: Ray, workgroup_id: vec2<u32>, sample_id: u32) -> vec3<f32> {
@@ -252,10 +285,37 @@ fn get_color(ray: Ray, workgroup_id: vec2<u32>, sample_id: u32) -> vec3<f32> {
                 let reflected = reflect(current_ray.dir, result.normal);
                 let dir = normalize(reflected) + material.fuzz * random_unit_vec3(&rng_state);
 
-                let epsilon = 0.001;
-                current_ray = Ray(result.collision + epsilon * result.normal, dir);
+                // let epsilon = 0.001;
+                current_ray = Ray(result.collision, dir);
 
                 attenuation *= material.alpha;
+                bounce++;
+            } else if result.material.x == 2 {
+                // dielectric material
+                let material = DIELECTRIC_MATERIALS[result.material.y];
+
+                var refraction_index = 0.0;
+                if result.front_face {
+                    refraction_index = 1.0 / material.refraction_index;
+                } else {
+                    refraction_index = material.refraction_index;
+                }
+
+                let current_dir = normalize(current_ray.dir);
+
+                let cos_theta = min(dot(-current_dir, result.normal), 1.0);
+                let sin_theta = sqrt(1.0 - pow(cos_theta, 2.0));
+
+                var dir = vec3(0.0);
+                let random = next_random(& rng_state);
+                if refraction_index * sin_theta > 1.0 || reflectance(cos_theta, refraction_index) > random {
+                    dir = reflect(current_dir, result.normal);
+                } else {
+                    dir = refract(current_dir, result.normal, refraction_index);
+                }
+
+                current_ray = Ray(result.collision, dir);
+
                 bounce++;
             } else {
                 break;
