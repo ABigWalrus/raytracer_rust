@@ -1,3 +1,5 @@
+
+
 @group(0) @binding(0) var outputTex: texture_storage_2d<rgba8unorm, write>;
 @group(0) @binding(1) var<uniform> camera: Camera;
 struct Camera {
@@ -33,19 +35,66 @@ var<workgroup> RANDOM_COUNTER_Y: u32;
 const RANDOM_IMAGE_WIDTH = 64;
 const RANDOM_IMAGE_HEIGHT = 64;
 
+fn random_vec3(p: vec2<f32>) -> vec3<f32> {
+    var x = bitcast<u32>(p.x);
+    var y = bitcast<u32>(p.y);
+
+    // PCG Hash steps
+    var state = x * 747796405u + 2891336453u;
+    var word = ((state >> ((state >> 28u) + 4u)) ^ state) * 277803737u;
+    let rx = f32((word >> 22u) ^ word) / 4294967295.0;
+
+    state = y * 747796405u + 2891336453u;
+    word = ((state >> ((state >> 28u) + 4u)) ^ state) * 277803737u;
+    let ry = f32((word >> 22u) ^ word) / 4294967295.0;
+
+    let rz = fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453);
+
+    // Remap to [-1.0, 1.0] and normalize
+    return normalize(vec3(rx, ry, rz) * 2.0 - 1.0);
+}
+
+fn random_on_hemisphere(normal: vec3<f32>, uv: vec2<f32>) -> vec3<f32> {
+    let random = random_vec3(uv);
+    if dot(random, normal) > 0.0 {
+        return random;
+    } else {
+        return -random;
+    }
+}
+
+fn vec2_to_uv(vec: vec2<f32>) -> vec2<f32> {
+    return normalize(vec) / 2.0 + 0.5;
+}
+
 const SKY_COLOR = vec3(0.5, 0.7, 1.0);
 
-const SPHERES_COUNT = 2;
+const SPHERES_COUNT = 4;
 
 const SPHERES = array<Sphere, SPHERES_COUNT>(
-    Sphere( // Ground
-        vec3(0.0, 0.0, -1.0),
-        0.5,
-        vec3(1.0, 0.0, 0.0)),
     Sphere(
-        vec3(0.0, -3.0, -2.0),
-        2.5,
-        vec3(0.0, 1.0, 0.0),
+        vec3(0.0, -100.5, -1.0),
+        100,
+        vec2(0,
+            0),
+    ),
+    Sphere(
+        vec3(0.0, 0.0, -1.2),
+        0.5,
+        vec2(0,
+            1)
+    ),
+    Sphere(
+        vec3(-1.0, 0.0, -1.0),
+        0.5,
+        vec2(1,
+            0)
+    ),
+    Sphere(
+        vec3(1.0, 0.0, -1.0),
+        0.5,
+        vec2(1,
+            1)
     ),
     // Sphere(
     //     vec3(-4.0, 1.0, 0.0),
@@ -57,14 +106,38 @@ const SPHERES = array<Sphere, SPHERES_COUNT>(
 struct Sphere {
     center: vec3<f32>,
     radius: f32,
-    color: vec3<f32>,
+    material: vec2<u32>, // represents: vec2(material type, material index)
 }
+
+struct DiffuseMaterial {
+    alpha: vec3<f32>}
+
+const DIFFUSE_MATERIALS = array<DiffuseMaterial, 2>(
+    DiffuseMaterial(
+        vec3(0.8, 0.8, 0.0)
+    ),
+    DiffuseMaterial(
+        vec3(0.1, 0.2, 0.5)
+    )
+);
+
+struct MetallicMaterial {
+    alpha: vec3<f32>}
+
+const METALLIC_MATERIALS = array<MetallicMaterial, 2>(
+    MetallicMaterial(
+        vec3(0.8, 0.8, 0.8)
+    ),
+    MetallicMaterial(
+        vec3(0.8, 0.6, 0.2)
+    )
+);
 
 struct HitResult {
     hit: bool,
     normal: vec3<f32>,
     collision: vec3<f32>,
-    color: vec3<f32>,
+    material: vec2<u32>,
 }
 
 struct Ray {
@@ -86,8 +159,9 @@ fn get_ray(uv: vec2<f32>) -> Ray {
     return Ray(camera.center, dir);
 }
 
-fn sky_color(uv: vec2<f32>) -> vec3<f32> {
-    return uv.y * SKY_COLOR;
+fn sky_color(dir: vec3<f32>) -> vec3<f32> {
+    let a = 0.5 * (normalize(dir).y + 1.0);
+    return (1.0 - a) * vec3(1.0, 1.0, 1.0) + a * vec3(0.5, 0.7, 1.0);
 }
 
 fn hit_sphere(ray: Ray) -> HitResult {
@@ -98,17 +172,17 @@ fn hit_sphere(ray: Ray) -> HitResult {
 
         let oc = ray.origin - sphere.center;
         let a = dot(ray.dir, ray.dir);
-        let half_b = dot(oc, ray.dir);
+        let h = dot(oc, ray.dir);
         let c = dot(oc, oc) - sphere.radius * sphere.radius;
 
-        let discriminant = half_b * half_b - a * c;
+        let discriminant = h * h - a * c;
 
         if discriminant >= 0.0 {
             let sqrtd = sqrt(discriminant);
-            var t = (-half_b - sqrtd) / a;
+            var t = (-h - sqrtd) / a;
 
-            if t < 0.001 {
-                t = (-half_b + sqrtd) / a;
+            if t < 0.001 || t > closest_t {
+                t = (-h + sqrtd) / a;
             }
 
             if t >= 0.001 && t < closest_t {
@@ -122,38 +196,66 @@ fn hit_sphere(ray: Ray) -> HitResult {
         let sphere = SPHERES[closest_i];
         let collision = ray_at(ray, closest_t);
         let normal = normalize(collision - sphere.center);
-        return HitResult(true, normal, collision, sphere.color);
+        return HitResult(true, normal, collision, sphere.material);
     }
 
-    return HitResult(false, vec3(0.0), vec3(0.0), vec3(0.0));
+    return HitResult(false, vec3(0.0), vec3(0.0), vec2(0));
 }
 
-fn get_color(ray: Ray) -> vec4<f32> {
+fn get_color(ray: Ray, invocation_id: vec2<f32>) -> vec4<f32> {
     var current_ray = ray;
     let max_bounce = 10;
-    var count = 0;
-    var acc_color = vec3(0.0);
-
-    while count < max_bounce {
+    var bounce = 0;
+    var attenuation = vec3(1.0, 1.0, 1.0);
+    let gamma = 0.2;
+    while bounce <= max_bounce {
         let result = hit_sphere(current_ray);
-        count++;
-        if !result.hit {
-            acc_color += SKY_COLOR;
+        if result.hit {
+            if result.material.x == 0 {
+                // diffuse material
+
+                let material = DIFFUSE_MATERIALS[result.material.y];
+
+                // let random_seed = invocation_id * vec2<f32>(f32(bounce) * 7.13, f32(bounce) * 4.18);
+                // let dir = normalize(result.normal + random_vec3(random_seed));
+                let dir = normalize(result.normal + random_vec3(result.collision.xy));
+
+                let epsilon = 0.001;
+                current_ray = Ray(result.collision + epsilon * result.normal, dir);
+
+                attenuation *= material.alpha;
+                bounce++;
+            } else if result.material.x == 1 {
+                // metallic material
+                let material = METALLIC_MATERIALS[result.material.y];
+
+                let dir = reflect(current_ray.dir, result.normal);
+
+                let epsilon = 0.001;
+                current_ray = Ray(result.collision + epsilon * result.normal, dir);
+
+                attenuation *= material.alpha;
+                bounce++;
+            } else {
+                break;
+            }
+        } else {
+            attenuation *= sky_color(current_ray.dir);
             break;
         }
-        let epsilon = 0.1;
-        acc_color += result.color;
-
-        current_ray = Ray(result.collision + (result.normal * epsilon), reflect(current_ray.dir, result.normal));
-        // current_ray = Ray(result.collision + (result.normal * epsilon), refract(current_ray.dir, result.normal, 1.5));
+    }
+    if bounce == 0 {
+        attenuation *= sky_color(current_ray.dir);
     }
 
-    return vec4(acc_color / f32(count), 1.0);
+    return vec4(attenuation, 1.0);
 }
 
-@compute @workgroup_size(8, 8)
+@compute @workgroup_size(1, 1)
 fn main(@builtin(global_invocation_id) invocation_id: vec3<u32>, @builtin(num_workgroups) workgroup_size: vec3<u32>) {
-    let aspect_ratio = f32(workgroup_size.x) / f32(workgroup_size.y);
+    let texture_dimensions = textureDimensions(outputTex);
+
+    let aspect_ratio = f32(texture_dimensions.x) / f32(texture_dimensions.y);
 
     let focal_length = 1.0;
     let viewport_height = 2.0;
@@ -163,8 +265,8 @@ fn main(@builtin(global_invocation_id) invocation_id: vec3<u32>, @builtin(num_wo
     let viewport_u = vec3(viewport_width, 0.0, 0.0);
     let viewport_v = vec3(0.0, -viewport_height, 0.0);
 
-    let pixel_delta_u = viewport_u / f32(workgroup_size.x);
-    let pixel_delta_v = viewport_v / f32(workgroup_size.y);
+    let pixel_delta_u = viewport_u / f32(texture_dimensions.x);
+    let pixel_delta_v = viewport_v / f32(texture_dimensions.y);
 
     let viewport_upper_left = camera_center - vec3(0.0, 0.0, focal_length) - viewport_u / 2.0 - viewport_v / 2.0;
     let pixel00_loc = viewport_upper_left + 0.5 * (pixel_delta_u + pixel_delta_v);
@@ -172,7 +274,7 @@ fn main(@builtin(global_invocation_id) invocation_id: vec3<u32>, @builtin(num_wo
     // let uv = vec2(f32(invocation_id.x) / f32(workgroup_size.x), 1.0 - f32(invocation_id.y) / f32(workgroup_size.y));
     let pixel_center = pixel00_loc + f32(invocation_id.x) * pixel_delta_u + f32(invocation_id.y) * pixel_delta_v;
     let ray_direction = normalize(pixel_center - camera_center);
-    let color = get_color(Ray(camera_center, ray_direction));
+    let color = get_color(Ray(camera_center, ray_direction), vec2<f32>(invocation_id.xy));
 
     textureStore(outputTex, vec2<i32>(invocation_id.xy), color);
 }
