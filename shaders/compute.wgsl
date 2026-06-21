@@ -221,13 +221,13 @@ fn hit_sphere(ray: Ray) -> HitResult {
     return HitResult(false, vec3(0.0), vec3(0.0), vec2(0));
 }
 
-fn get_color(ray: Ray, invocation_id: vec2<u32>, sample_id: i32) -> vec3<f32> {
+fn get_color(ray: Ray, workgroup_id: vec2<u32>, sample_id: u32) -> vec3<f32> {
     var current_ray = ray;
     let max_bounce = 10;
     var bounce = 0;
     var attenuation = vec3(1.0, 1.0, 1.0);
     let gamma = 0.2;
-    var rng_state = invocation_id.x * 3128u + invocation_id.y * 9213u + u32(sample_id) * 984711u;
+    var rng_state = workgroup_id.x * 3128u + workgroup_id.y * 9213u + sample_id * 984711u;
     while bounce <= max_bounce {
         let result = hit_sphere(current_ray);
         if result.hit {
@@ -272,8 +272,20 @@ fn get_color(ray: Ray, invocation_id: vec2<u32>, sample_id: i32) -> vec3<f32> {
     return attenuation;
 }
 
-@compute @workgroup_size(1, 1)
-fn main(@builtin(global_invocation_id) invocation_id: vec3<u32>, @builtin(num_workgroups) workgroup_size: vec3<u32>) {
+const WORKGROUP_WIDTH = 6;
+const WORKGROUP_HEIGHT = 6;
+const WORKGROUP_DEPTH = 1;
+
+const SAMPLE_SIZE = WORKGROUP_WIDTH * WORKGROUP_HEIGHT * WORKGROUP_DEPTH; 
+
+// 36 samples
+var<workgroup> workgroupColors: array<vec3<f32>, SAMPLE_SIZE>; 
+
+@compute @workgroup_size(WORKGROUP_WIDTH, WORKGROUP_HEIGHT, WORKGROUP_DEPTH)
+fn main(
+    @builtin(local_invocation_index) local_invocation_index: u32,
+    @builtin(workgroup_id) workgroup_id: vec3<u32>,
+) {
     let texture_dimensions = textureDimensions(outputTex);
 
     let aspect_ratio = f32(texture_dimensions.x) / f32(texture_dimensions.y);
@@ -289,25 +301,26 @@ fn main(@builtin(global_invocation_id) invocation_id: vec3<u32>, @builtin(num_wo
     let pixel_delta_u = viewport_u / f32(texture_dimensions.x);
     let pixel_delta_v = viewport_v / f32(texture_dimensions.y);
 
-    let samples = 16;
-    var rng_state = invocation_id.x * 19347u + invocation_id.y * 8795u;
-    var aggregated_color = vec3(0.0);
+    var rng_state = local_invocation_index * 19347u;
 
     let viewport_upper_left = camera_center - vec3(0.0, 0.0, focal_length) - viewport_u / 2.0 - viewport_v / 2.0;
     let pixel00_loc = viewport_upper_left + 0.5 * (pixel_delta_u + pixel_delta_v);
 
-    for (var sample_id = 0; sample_id < samples; sample_id++) {
-        let random_sample = random_unit_vec3(& rng_state).xy * 0.5;
+    let random_sample = random_unit_vec3(& rng_state).xy * 0.5;
 
-        let pixel_center = pixel00_loc + (f32(invocation_id.x) + random_sample.x) * pixel_delta_u + (f32(invocation_id.y) + random_sample.y) * pixel_delta_v;
+    let pixel_center = pixel00_loc + (f32(workgroup_id.x) + random_sample.x) * pixel_delta_u + (f32(workgroup_id.y) + random_sample.y) * pixel_delta_v;
 
-        let ray_direction = normalize(pixel_center - camera_center);
-        aggregated_color += get_color(Ray(camera_center, ray_direction), invocation_id.xy, sample_id);
+    let ray_direction = normalize(pixel_center - camera_center);
+    workgroupColors[local_invocation_index] = get_color(Ray(camera_center, ray_direction), workgroup_id.xy, local_invocation_index);
+
+    workgroupBarrier();
+
+    if local_invocation_index == 0 {
+        var aggregated_color = vec3(0.0);
+        for (var i = 0; i < SAMPLE_SIZE; i++) {
+            aggregated_color += workgroupColors[i];
+        }
+
+        textureStore(outputTex, vec2<i32>(workgroup_id.xy), vec4(aggregated_color / f32(SAMPLE_SIZE), 1.0));
     }
-
-    // let uv = vec2(f32(invocation_id.x) / f32(workgroup_size.x), 1.0 - f32(invocation_id.y) / f32(workgroup_size.y));
-
-    textureStore(outputTex, vec2<i32>(invocation_id.xy), vec4(aggregated_color / f32(samples), 1.0));
 }
-
-
