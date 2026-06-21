@@ -71,7 +71,7 @@ const SKY_COLOR = vec3(0.5, 0.7, 1.0);
 
 const SPHERES_COUNT = 4;
 
-const SPHERES = array<Sphere, SPHERES_COUNT>(
+const SPHERES = array<Sphere, 4>(
     Sphere(
         vec3(0.0, -100.5, -1.0),
         100,
@@ -122,14 +122,16 @@ const DIFFUSE_MATERIALS = array<DiffuseMaterial, 2>(
 );
 
 struct MetallicMaterial {
-    alpha: vec3<f32>}
+    alpha: vec3<f32>,
+    fuzz: f32,
+}
 
 const METALLIC_MATERIALS = array<MetallicMaterial, 2>(
     MetallicMaterial(
-        vec3(0.8, 0.8, 0.8)
+        vec3(0.8, 0.8, 0.8), 0.3,
     ),
     MetallicMaterial(
-        vec3(0.8, 0.6, 0.2)
+        vec3(0.8, 0.6, 0.2), 1.0,
     )
 );
 
@@ -229,7 +231,8 @@ fn get_color(ray: Ray, invocation_id: vec2<f32>) -> vec4<f32> {
                 // metallic material
                 let material = METALLIC_MATERIALS[result.material.y];
 
-                let dir = reflect(current_ray.dir, result.normal);
+                let reflected = reflect(current_ray.dir, result.normal);
+                let dir = normalize(reflected) + material.fuzz * random_vec3(result.collision.xz);
 
                 let epsilon = 0.001;
                 current_ray = Ray(result.collision + epsilon * result.normal, dir);
