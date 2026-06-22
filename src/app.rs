@@ -11,7 +11,10 @@ use wgpu::{
     // wgt::instance,
 };
 use winit::{
-    application::ApplicationHandler, dpi::PhysicalSize, event::WindowEvent, window::Window,
+    application::ApplicationHandler,
+    dpi::PhysicalSize,
+    event::{DeviceEvent, WindowEvent},
+    window::Window,
 };
 
 use crate::{camera::Camera, math::Vec3, texture::Texture};
@@ -489,11 +492,10 @@ impl State {
 
 impl ApplicationHandler for RayTracer {
     fn resumed(&mut self, event_loop: &winit::event_loop::ActiveEventLoop) {
-        let window = Arc::new(
-            event_loop
-                .create_window(Window::default_attributes())
-                .unwrap(),
-        );
+        let window_attributes = Window::default_attributes().with_title("Ray Tracer");
+        let window = Arc::new(event_loop.create_window(window_attributes).unwrap());
+        let _ = window.set_cursor_grab(winit::window::CursorGrabMode::Locked);
+        let _ = window.set_cursor_visible(false);
 
         self.state = Some(pollster::block_on(State::new(window)));
     }
@@ -520,6 +522,20 @@ impl ApplicationHandler for RayTracer {
                 if let Some(state) = &mut self.state {
                     state.window_size = new_size;
                 }
+            }
+            _ => (),
+        }
+    }
+
+    fn device_event(
+        &mut self,
+        _event_loop: &winit::event_loop::ActiveEventLoop,
+        _device_id: winit::event::DeviceId,
+        event: DeviceEvent,
+    ) {
+        match event {
+            DeviceEvent::MouseMotion { delta } => {
+                println!("{:?}", delta);
             }
             _ => (),
         }
