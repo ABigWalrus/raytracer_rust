@@ -13,7 +13,8 @@ use wgpu::{
 use winit::{
     application::ApplicationHandler,
     dpi::PhysicalSize,
-    event::{DeviceEvent, WindowEvent},
+    event::{DeviceEvent, KeyEvent, WindowEvent},
+    keyboard::{KeyCode, PhysicalKey},
     window::Window,
 };
 
@@ -515,12 +516,32 @@ impl ApplicationHandler for RayTracer {
                 if let Some(state) = &mut self.state {
                     state.update();
                     state.render();
-                    println!("FPS: {}", state.fps_counter.fps());
+                    // println!("FPS: {}", state.fps_counter.fps());
                 }
             }
             WindowEvent::Resized(new_size) => {
                 if let Some(state) = &mut self.state {
                     state.window_size = new_size;
+                }
+            }
+            WindowEvent::KeyboardInput {
+                event:
+                    KeyEvent {
+                        physical_key: PhysicalKey::Code(key_code),
+                        state,
+                        repeat,
+                        ..
+                    },
+                ..
+            } => {
+                if state.is_pressed() {
+                    match key_code {
+                        KeyCode::KeyW => println!("w"),
+                        KeyCode::KeyA => println!("a"),
+                        KeyCode::KeyS => println!("s"),
+                        KeyCode::KeyD => println!("d"),
+                        _ => (),
+                    }
                 }
             }
             _ => (),
@@ -535,7 +556,7 @@ impl ApplicationHandler for RayTracer {
     ) {
         match event {
             DeviceEvent::MouseMotion { delta } => {
-                println!("{:?}", delta);
+                // println!("{:?}", delta);
             }
             _ => (),
         }
