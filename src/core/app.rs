@@ -1,7 +1,4 @@
-use std::{
-    sync::Arc,
-    time::{Duration, Instant},
-};
+use std::sync::Arc;
 
 use winit::{
     application::ApplicationHandler,
@@ -135,7 +132,7 @@ impl ApplicationHandler for RayTracer<'_> {
         event: DeviceEvent,
     ) {
         match event {
-            DeviceEvent::MouseMotion { delta } => {
+            DeviceEvent::MouseMotion { delta: _delta } => {
                 // println!("{:?}", delta);
             }
             _ => (),
