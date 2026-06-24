@@ -1,8 +1,9 @@
 use std::{
     iter,
     sync::Arc,
-    time::{Duration, Instant, SystemTime, UNIX_EPOCH},
+    time::{SystemTime, UNIX_EPOCH},
 };
+use winit::{dpi::PhysicalSize, window::Window};
 
 use wgpu::{
     // SurfaceTexture,
@@ -10,112 +11,30 @@ use wgpu::{
     // wgc::device::queue,
     // wgt::instance,
 };
-use winit::{
-    application::ApplicationHandler,
-    dpi::PhysicalSize,
-    event::{DeviceEvent, KeyEvent, WindowEvent},
-    keyboard::{KeyCode, PhysicalKey},
-    window::Window,
-};
 
-use crate::{camera::Camera, math::Vec3, texture::Texture};
+use crate::core::camera::Camera;
+use crate::core::texture::Texture;
+use crate::math::Vec3;
 
-pub struct RayTracer {
-    state: Option<State>,
-}
-
-impl RayTracer {
-    pub fn new() -> Self {
-        Self { state: None }
-    }
-}
-
-struct State {
-    window: Arc<Window>,
-    surface: wgpu::Surface<'static>,
-    window_size: PhysicalSize<u32>,
+pub struct RenderState<'window> {
+    surface: wgpu::Surface<'window>,
+    pub window_size: PhysicalSize<u32>,
     device: wgpu::Device,
     queue: wgpu::Queue,
-    camera: Camera,
+    pub camera: Camera,
     camera_buffer: wgpu::Buffer,
     compute_pipeline: wgpu::ComputePipeline,
     compute_bind_group: wgpu::BindGroup,
     util_bind_group: wgpu::BindGroup,
     render_pipeline: wgpu::RenderPipeline,
     render_bind_group: wgpu::BindGroup,
-    util_buffer: wgpu::Buffer,
     util_data: UtilData,
+    util_buffer: wgpu::Buffer,
     _random_texture: Texture,
-    fps_counter: FpsCounter,
 }
 
-struct UtilData {
-    time: u32,
-    _pad0: u32,
-    _pad1: u32,
-    _pad2: u32,
-}
-
-impl UtilData {
-    fn new() -> Self {
-        Self {
-            time: get_time(),
-            _pad0: 0,
-            _pad1: 0,
-            _pad2: 0,
-        }
-    }
-
-    fn update(&mut self) {
-        self.time = get_time();
-    }
-
-    fn to_bytes(&self) -> [u8; 16] {
-        let mut bytes = [0u8; 16];
-        bytes[0..4].copy_from_slice(&self.time.to_le_bytes());
-        bytes
-    }
-}
-
-struct FpsCounter {
-    instant: Instant,
-    frames: i32,
-    fps: f32,
-}
-
-impl FpsCounter {
-    fn new() -> Self {
-        Self {
-            instant: Instant::now(),
-            frames: 0,
-            fps: 0.0,
-        }
-    }
-
-    fn update(&mut self) {
-        self.frames += 1;
-        let elapsed = self.instant.elapsed();
-        if elapsed >= Duration::from_millis(1000) {
-            self.fps = self.frames as f32 / elapsed.as_secs() as f32;
-            self.frames = 0;
-            self.instant = Instant::now();
-        }
-    }
-
-    const fn fps(&self) -> f32 {
-        self.fps
-    }
-}
-
-fn get_time() -> u32 {
-    let dur = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .expect("Time went backwards");
-    dur.as_micros() as u32
-}
-
-impl State {
-    async fn new(window: Arc<Window>) -> Self {
+impl<'window> RenderState<'window> {
+    pub async fn new(window: Arc<Window>) -> Self {
         let instance = wgpu::Instance::new(&wgpu::InstanceDescriptor {
             backends: wgpu::Backends::PRIMARY,
             ..Default::default()
@@ -411,7 +330,6 @@ impl State {
         });
 
         Self {
-            window,
             surface,
             window_size,
             device,
@@ -426,12 +344,11 @@ impl State {
             util_data,
             util_buffer,
             _random_texture: random_texture,
-            fps_counter: FpsCounter::new(),
         }
     }
 
-    fn update(&mut self) {
-        self.fps_counter.update();
+    pub fn update(&mut self) {
+        // self.fps_counter.update();
 
         self.util_data.update();
         self.queue
@@ -442,8 +359,7 @@ impl State {
             .write_buffer(&self.camera_buffer, 0, &self.camera.to_bytes());
     }
 
-    fn render(&self) {
-        self.window.request_redraw();
+    pub fn render(&self) {
         let frame = self.surface.get_current_texture();
         if frame.is_err() {
             return;
@@ -496,85 +412,37 @@ impl State {
     }
 }
 
-impl ApplicationHandler for RayTracer {
-    fn resumed(&mut self, event_loop: &winit::event_loop::ActiveEventLoop) {
-        let window_attributes = Window::default_attributes().with_title("Ray Tracer");
-        let window = Arc::new(event_loop.create_window(window_attributes).unwrap());
-        let _ = window.set_cursor_grab(winit::window::CursorGrabMode::Locked);
-        let _ = window.set_cursor_visible(false);
+struct UtilData {
+    time: u32,
+    _pad0: u32,
+    _pad1: u32,
+    _pad2: u32,
+}
 
-        self.state = Some(pollster::block_on(State::new(window)));
-    }
+fn get_time() -> u32 {
+    let dur = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .expect("Time went backwards");
+    dur.as_micros() as u32
+}
 
-    fn window_event(
-        &mut self,
-        event_loop: &winit::event_loop::ActiveEventLoop,
-        _window_id: winit::window::WindowId,
-        event: winit::event::WindowEvent,
-    ) {
-        match event {
-            WindowEvent::CloseRequested => {
-                println!("The close button was pressed; stopping");
-                event_loop.exit();
-            }
-            WindowEvent::RedrawRequested => {
-                if let Some(state) = &mut self.state {
-                    state.update();
-                    state.render();
-                    // println!("FPS: {}", state.fps_counter.fps());
-                }
-            }
-            WindowEvent::Resized(new_size) => {
-                if let Some(state) = &mut self.state {
-                    state.window_size = new_size;
-                }
-            }
-            WindowEvent::KeyboardInput {
-                event:
-                    KeyEvent {
-                        physical_key: PhysicalKey::Code(key_code),
-                        state,
-                        repeat,
-                        ..
-                    },
-                ..
-            } => {
-                if let Some(render_state) = &mut self.state {
-                    if state.is_pressed() {
-                        let speed = 0.05;
-                        match key_code {
-                            KeyCode::KeyW => {
-                                render_state.camera.translate(Vec3::new(0.0, 0.0, -speed))
-                            }
-                            KeyCode::KeyA => {
-                                render_state.camera.translate(Vec3::new(-speed, 0.0, 0.0))
-                            }
-                            KeyCode::KeyS => {
-                                render_state.camera.translate(Vec3::new(0.0, 0.0, speed))
-                            }
-                            KeyCode::KeyD => {
-                                render_state.camera.translate(Vec3::new(speed, 0.0, 0.0))
-                            }
-                            _ => (),
-                        }
-                    }
-                }
-            }
-            _ => (),
+impl UtilData {
+    fn new() -> Self {
+        Self {
+            time: get_time(),
+            _pad0: 0,
+            _pad1: 0,
+            _pad2: 0,
         }
     }
 
-    fn device_event(
-        &mut self,
-        _event_loop: &winit::event_loop::ActiveEventLoop,
-        _device_id: winit::event::DeviceId,
-        event: DeviceEvent,
-    ) {
-        match event {
-            DeviceEvent::MouseMotion { delta } => {
-                // println!("{:?}", delta);
-            }
-            _ => (),
-        }
+    fn update(&mut self) {
+        self.time = get_time();
+    }
+
+    fn to_bytes(&self) -> [u8; 16] {
+        let mut bytes = [0u8; 16];
+        bytes[0..4].copy_from_slice(&self.time.to_le_bytes());
+        bytes
     }
 }
