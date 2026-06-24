@@ -9,7 +9,7 @@ pub struct Camera {
     // aspect_ratio: f32,
     image_width: u32,
     image_height: u32,
-    center: Vec3,
+    pub center: Vec3,
     image_center: Vec3,
     pixel_delta_u: Vec3,
     pixel_delta_v: Vec3,
@@ -134,6 +134,10 @@ impl Camera {
         // bytes[104..116].copy_from_slice(&self.defocus_disk_v.to_bytes());
         // bytes[116..120].copy_from_slice(&f32_pad);
         // bytes[120..128].copy_from_slice(&[0u8; 8]);
+    }
+
+    pub fn translate(&mut self, vec: Vec3) {
+        self.center += vec;
     }
 
     // pub fn render(&self, world: &impl Hittable, mut target: impl Write) {

@@ -36,8 +36,8 @@ struct State {
     window_size: PhysicalSize<u32>,
     device: wgpu::Device,
     queue: wgpu::Queue,
-    _camera: Camera,
-    _camera_buffer: wgpu::Buffer,
+    camera: Camera,
+    camera_buffer: wgpu::Buffer,
     compute_pipeline: wgpu::ComputePipeline,
     compute_bind_group: wgpu::BindGroup,
     util_bind_group: wgpu::BindGroup,
@@ -194,7 +194,7 @@ impl State {
             window_size.width,
             window_size.height,
             20.0,
-            Vec3::new(0.0, 0.0, 10.0),
+            Vec3::new(0.0, 0.0, 0.0),
             Vec3::new(0.0, 0.0, 0.0),
             10,
             50,
@@ -416,8 +416,8 @@ impl State {
             window_size,
             device,
             queue,
-            _camera: camera,
-            _camera_buffer: camera_buffer,
+            camera,
+            camera_buffer,
             compute_pipeline,
             compute_bind_group,
             util_bind_group,
@@ -431,10 +431,15 @@ impl State {
     }
 
     fn update(&mut self) {
-        self.util_data.update();
         self.fps_counter.update();
+
+        self.util_data.update();
         self.queue
             .write_buffer(&self.util_buffer, 0, &self.util_data.to_bytes());
+
+        // self.camera.updat
+        self.queue
+            .write_buffer(&self.camera_buffer, 0, &self.camera.to_bytes());
     }
 
     fn render(&self) {
@@ -534,13 +539,24 @@ impl ApplicationHandler for RayTracer {
                     },
                 ..
             } => {
-                if state.is_pressed() {
-                    match key_code {
-                        KeyCode::KeyW => println!("w"),
-                        KeyCode::KeyA => println!("a"),
-                        KeyCode::KeyS => println!("s"),
-                        KeyCode::KeyD => println!("d"),
-                        _ => (),
+                if let Some(render_state) = &mut self.state {
+                    if state.is_pressed() {
+                        let speed = 0.05;
+                        match key_code {
+                            KeyCode::KeyW => {
+                                render_state.camera.translate(Vec3::new(0.0, 0.0, -speed))
+                            }
+                            KeyCode::KeyA => {
+                                render_state.camera.translate(Vec3::new(-speed, 0.0, 0.0))
+                            }
+                            KeyCode::KeyS => {
+                                render_state.camera.translate(Vec3::new(0.0, 0.0, speed))
+                            }
+                            KeyCode::KeyD => {
+                                render_state.camera.translate(Vec3::new(speed, 0.0, 0.0))
+                            }
+                            _ => (),
+                        }
                     }
                 }
             }

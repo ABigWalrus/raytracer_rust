@@ -353,7 +353,7 @@ fn main(
     let focal_length = 1.0;
     let viewport_height = 2.0;
     let viewport_width = viewport_height * aspect_ratio;
-    let camera_center = vec3(0.0);
+    // let camera_center = vec3(0.0);
 
     let viewport_u = vec3(viewport_width, 0.0, 0.0);
     let viewport_v = vec3(0.0, -viewport_height, 0.0);
@@ -363,15 +363,15 @@ fn main(
 
     var rng_state = local_invocation_index * 19347u;
 
-    let viewport_upper_left = camera_center - vec3(0.0, 0.0, focal_length) - viewport_u / 2.0 - viewport_v / 2.0;
+    let viewport_upper_left = camera.center - vec3(0.0, 0.0, focal_length) - viewport_u / 2.0 - viewport_v / 2.0;
     let pixel00_loc = viewport_upper_left + 0.5 * (pixel_delta_u + pixel_delta_v);
 
     let random_sample = random_unit_vec3(& rng_state).xy * 0.5;
 
     let pixel_center = pixel00_loc + (f32(workgroup_id.x) + random_sample.x) * pixel_delta_u + (f32(workgroup_id.y) + random_sample.y) * pixel_delta_v;
 
-    let ray_direction = normalize(pixel_center - camera_center);
-    workgroupColors[local_invocation_index] = get_color(Ray(camera_center, ray_direction), workgroup_id.xy, local_invocation_index);
+    let ray_direction = normalize(pixel_center - camera.center);
+    workgroupColors[local_invocation_index] = get_color(Ray(camera.center, ray_direction), workgroup_id.xy, local_invocation_index);
 
     workgroupBarrier();
 
