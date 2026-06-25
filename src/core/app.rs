@@ -132,7 +132,12 @@ impl ApplicationHandler for RayTracer<'_> {
         event: DeviceEvent,
     ) {
         match event {
-            DeviceEvent::MouseMotion { delta: _delta } => {
+            DeviceEvent::MouseMotion { delta } => {
+                if let Some(render_state) = &mut self.render_state {
+                    render_state
+                        .camera
+                        .translate(Vec3::new(0.0, (delta.1 / 600.0) as f32, 0.0));
+                }
                 // println!("{:?}", delta);
             }
             _ => (),
