@@ -1,4 +1,5 @@
 mod app;
+mod buffer;
 mod camera;
 mod render_state;
 mod texture;
