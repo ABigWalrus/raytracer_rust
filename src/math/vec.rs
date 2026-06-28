@@ -7,6 +7,25 @@ pub struct Vec3 {
     items: [f32; 3],
 }
 
+pub type Radians = Vec3;
+
+impl Radians {
+    #[inline]
+    pub fn alpha(&self) -> f32 {
+        self.items[0]
+    }
+
+    #[inline]
+    pub fn beta(&self) -> f32 {
+        self.items[1]
+    }
+
+    #[inline]
+    pub fn gamma(&self) -> f32 {
+        self.items[2]
+    }
+}
+
 impl Vec3 {
     pub fn new(x: f32, y: f32, z: f32) -> Self {
         Self { items: [x, y, z] }
@@ -125,8 +144,8 @@ impl Vec3 {
         }
     }
 
-    pub fn to_bytes(&self) -> [u8; 12] {
-        let mut bytes = [0u8; 12];
+    pub fn to_bytes(&self) -> [u8; 16] {
+        let mut bytes = [0u8; 16];
         bytes[0..4].copy_from_slice(&self.items[0].to_le_bytes());
         bytes[4..8].copy_from_slice(&self.items[1].to_le_bytes());
         bytes[8..12].copy_from_slice(&self.items[2].to_le_bytes());
@@ -221,6 +240,18 @@ impl Vec4 {
     #[inline]
     pub fn from_slice(slice: [f32; 4]) -> Self {
         Self { items: slice }
+    }
+
+    #[inline]
+    pub fn from_vec3(vec: Vec3, w: f32) -> Self {
+        Self {
+            items: [vec.x(), vec.y(), vec.z(), w],
+        }
+    }
+
+    #[inline]
+    pub fn get_vec3(&self) -> Vec3 {
+        Vec3::new(self.x(), self.y(), self.z())
     }
 
     #[allow(unused)]

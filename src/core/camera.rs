@@ -1,9 +1,6 @@
 use std::f32::consts;
 
-use crate::{
-    math::Vec3,
-    // rt_core::scene::{Hittable, Ray},
-};
+use crate::math::{Mat4, Radians, Vec3, Vec4};
 
 pub struct Camera {
     // aspect_ratio: f32,
@@ -141,42 +138,25 @@ impl Camera {
     }
 
     pub fn translate(&mut self, vec: Vec3) {
-        self.position += vec;
+        let forward = (self.look_at - self.position).normalize();
+
+        let world_up = Vec3::new(0.0, 1.0, 0.0);
+        let right = forward.cross(&world_up).normalize();
+        let up = right.cross(&forward);
+        let offset = (forward.mul(vec.z())) + (right.mul(vec.x())) + (up.mul(vec.y()));
+
+        self.position += offset;
+        self.look_at += offset;
         self.needs_update = true;
     }
 
-    pub fn rotate(&mut self, x: f32, y: f32) {
-        let mut local_x = self.look_at.x() - self.position.x();
-        let mut local_y = self.look_at.y() - self.position.y();
-        let mut local_z = self.look_at.z() - self.position.z();
+    pub fn rotate(&mut self, rotation: (f32, f32)) {
+        let dir = Vec4::from_vec3(self.look_at - self.position, 1.0);
 
-        // ---- STEP 2: Rotate around X-axis ----
-        // X stays the same. Y and Z change.
-        let cos_x = x.cos();
-        let sin_x = x.sin();
+        let rotation_matrix = Mat4::rotation(Radians::new(rotation.0, rotation.1, 0.0));
+        let new_dir = rotation_matrix * dir;
 
-        let y_after_x = local_y * cos_x - local_z * sin_x;
-        let z_after_x = local_y * sin_x + local_z * cos_x;
-
-        local_y = y_after_x;
-        local_z = z_after_x;
-
-        // ---- STEP 3: Rotate around Y-axis ----
-        // Y stays the same. X and Z change.
-        let cos_y = y.cos();
-        let sin_y = y.sin();
-
-        let x_after_y = local_x * cos_y + local_z * sin_y;
-        let z_after_y = -local_x * sin_y + local_z * cos_y;
-
-        local_x = x_after_y;
-        local_z = z_after_y;
-        self.look_at = Vec3::new(
-            local_x + self.position.x(),
-            local_y + self.position.y(),
-            local_z + self.position.z(),
-        );
-
+        self.look_at = new_dir.get_vec3() + self.position;
         self.needs_update = true;
     }
 

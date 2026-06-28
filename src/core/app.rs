@@ -79,17 +79,18 @@ impl ApplicationHandler for RayTracer<'_> {
             }
             WindowEvent::RedrawRequested => {
                 if let Some(state) = &mut self.render_state {
+                    let speed = 0.02;
                     if self.keys_pressed.contains(&KeyCode::KeyW) {
-                        state.camera.translate(Vec3::new(0.0, 0.0, -0.05));
+                        state.camera.translate(Vec3::new(0.0, 0.0, speed));
                     }
                     if self.keys_pressed.contains(&KeyCode::KeyS) {
-                        state.camera.translate(Vec3::new(0.0, 0.0, 0.05));
+                        state.camera.translate(Vec3::new(0.0, 0.0, -speed));
                     }
                     if self.keys_pressed.contains(&KeyCode::KeyA) {
-                        state.camera.translate(Vec3::new(0.05, 0.0, 0.0));
+                        state.camera.translate(Vec3::new(-speed, 0.0, 0.0));
                     }
                     if self.keys_pressed.contains(&KeyCode::KeyD) {
-                        state.camera.translate(Vec3::new(-0.05, 0.0, 0.0));
+                        state.camera.translate(Vec3::new(speed, 0.0, 0.0));
                     }
                     state.update();
                     state.render();
@@ -138,9 +139,10 @@ impl ApplicationHandler for RayTracer<'_> {
             DeviceEvent::MouseMotion { delta: (x, y) } => {
                 if let (Some(render_state), Some(window)) = (&mut self.render_state, &self.window) {
                     let size = window.inner_size();
-                    render_state
-                        .camera
-                        .rotate(x as f32 / size.width as f32, y as f32 / size.height as f32);
+                    render_state.camera.rotate((
+                        -y as f32 / size.height as f32,
+                        -x as f32 / size.width as f32,
+                    ));
                 }
                 // println!("{:?}", delta);
             }
