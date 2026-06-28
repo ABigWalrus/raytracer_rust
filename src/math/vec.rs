@@ -4,29 +4,29 @@ use crate::util::random_float_range;
 
 #[derive(Clone, Copy)]
 pub struct Vec3 {
-    value: [f32; 3],
+    items: [f32; 3],
 }
 
 impl Vec3 {
     pub fn new(x: f32, y: f32, z: f32) -> Self {
-        Self { value: [x, y, z] }
+        Self { items: [x, y, z] }
     }
 
     #[allow(unused)]
     pub fn zero() -> Self {
-        Self { value: [0.0; 3] }
+        Self { items: [0.0; 3] }
     }
 
     pub const fn x(&self) -> f32 {
-        self.value[0]
+        self.items[0]
     }
 
     pub const fn y(&self) -> f32 {
-        self.value[1]
+        self.items[1]
     }
 
     pub const fn z(&self) -> f32 {
-        self.value[2]
+        self.items[2]
     }
 
     pub fn length_squared(&self) -> f32 {
@@ -125,11 +125,11 @@ impl Vec3 {
         }
     }
 
-    pub fn to_bytes(&self) -> [u8; 16] {
-        let mut bytes = [0u8; 16];
-        bytes[0..4].copy_from_slice(&self.value[0].to_le_bytes());
-        bytes[4..8].copy_from_slice(&self.value[1].to_le_bytes());
-        bytes[8..12].copy_from_slice(&self.value[2].to_le_bytes());
+    pub fn to_bytes(&self) -> [u8; 12] {
+        let mut bytes = [0u8; 12];
+        bytes[0..4].copy_from_slice(&self.items[0].to_le_bytes());
+        bytes[4..8].copy_from_slice(&self.items[1].to_le_bytes());
+        bytes[8..12].copy_from_slice(&self.items[2].to_le_bytes());
         bytes
     }
 }
@@ -144,9 +144,9 @@ impl ops::Add for Vec3 {
 
 impl ops::AddAssign for Vec3 {
     fn add_assign(&mut self, rhs: Self) {
-        self.value[0] += rhs.x();
-        self.value[1] += rhs.y();
-        self.value[2] += rhs.z();
+        self.items[0] += rhs.x();
+        self.items[1] += rhs.y();
+        self.items[2] += rhs.z();
     }
 }
 
@@ -160,9 +160,9 @@ impl ops::Sub for Vec3 {
 
 impl ops::SubAssign for Vec3 {
     fn sub_assign(&mut self, rhs: Self) {
-        self.value[0] -= rhs.x();
-        self.value[1] -= rhs.y();
-        self.value[2] -= rhs.z();
+        self.items[0] -= rhs.x();
+        self.items[1] -= rhs.y();
+        self.items[2] -= rhs.z();
     }
 }
 
@@ -176,9 +176,9 @@ impl ops::Mul for Vec3 {
 
 impl ops::MulAssign for Vec3 {
     fn mul_assign(&mut self, rhs: Self) {
-        self.value[0] *= rhs.x();
-        self.value[1] *= rhs.y();
-        self.value[2] *= rhs.z();
+        self.items[0] *= rhs.x();
+        self.items[1] *= rhs.y();
+        self.items[2] *= rhs.z();
     }
 }
 
@@ -192,9 +192,9 @@ impl ops::Div for Vec3 {
 
 impl ops::DivAssign for Vec3 {
     fn div_assign(&mut self, rhs: Self) {
-        self.value[0] /= rhs.x();
-        self.value[1] /= rhs.y();
-        self.value[2] /= rhs.z();
+        self.items[0] /= rhs.x();
+        self.items[1] /= rhs.y();
+        self.items[2] /= rhs.z();
     }
 }
 
@@ -203,5 +203,184 @@ impl ops::Neg for Vec3 {
 
     fn neg(self) -> Self::Output {
         Self::new(-self.x(), -self.y(), -self.z())
+    }
+}
+
+#[derive(Clone, Copy)]
+pub struct Vec4 {
+    items: [f32; 4],
+}
+
+impl Vec4 {
+    pub fn new(x: f32, y: f32, z: f32, w: f32) -> Self {
+        Self {
+            items: [x, y, z, w],
+        }
+    }
+
+    #[inline]
+    pub fn from_slice(slice: [f32; 4]) -> Self {
+        Self { items: slice }
+    }
+
+    #[allow(unused)]
+    pub fn zero() -> Self {
+        Self { items: [0.0; 4] }
+    }
+
+    pub const fn x(&self) -> f32 {
+        self.items[0]
+    }
+
+    pub const fn y(&self) -> f32 {
+        self.items[1]
+    }
+
+    pub const fn z(&self) -> f32 {
+        self.items[2]
+    }
+
+    pub const fn w(&self) -> f32 {
+        self.items[3]
+    }
+
+    pub fn length_squared(&self) -> f32 {
+        self.x() * self.x() + self.y() * self.y() + self.z() * self.z() + self.w() + self.w()
+    }
+
+    pub fn length(&self) -> f32 {
+        f32::sqrt(self.length_squared())
+    }
+
+    pub fn div(&self, scalar: f32) -> Self {
+        Self::new(
+            self.x() / scalar,
+            self.y() / scalar,
+            self.z() / scalar,
+            self.w() / scalar,
+        )
+    }
+
+    pub fn mul(&self, scalar: f32) -> Self {
+        Self::new(
+            self.x() * scalar,
+            self.y() * scalar,
+            self.z() * scalar,
+            self.w() * scalar,
+        )
+    }
+
+    #[allow(unused)]
+    #[inline]
+    pub fn dot(&self, other: &Self) -> f32 {
+        self.x() * other.x() + self.y() * other.y() + self.z() * other.z() + self.w() * other.w()
+    }
+
+    pub fn normalize(&self) -> Self {
+        self.div(self.length())
+    }
+
+    pub fn to_bytes(&self) -> [u8; 16] {
+        let mut bytes = [0u8; 16];
+        bytes[0..4].copy_from_slice(&self.items[0].to_le_bytes());
+        bytes[4..8].copy_from_slice(&self.items[1].to_le_bytes());
+        bytes[8..12].copy_from_slice(&self.items[2].to_le_bytes());
+        bytes[12..16].copy_from_slice(&self.items[3].to_le_bytes());
+        bytes
+    }
+}
+
+impl ops::Add for Vec4 {
+    type Output = Self;
+
+    fn add(self, rhs: Self) -> Self::Output {
+        Self::new(
+            self.x() + rhs.x(),
+            self.y() + rhs.y(),
+            self.z() + rhs.z(),
+            self.w() + rhs.w(),
+        )
+    }
+}
+
+impl ops::AddAssign for Vec4 {
+    fn add_assign(&mut self, rhs: Self) {
+        self.items[0] += rhs.x();
+        self.items[1] += rhs.y();
+        self.items[2] += rhs.z();
+        self.items[3] += rhs.w();
+    }
+}
+
+impl ops::Sub for Vec4 {
+    type Output = Self;
+
+    fn sub(self, rhs: Self) -> Self::Output {
+        Self::new(
+            self.x() - rhs.x(),
+            self.y() - rhs.y(),
+            self.z() - rhs.z(),
+            self.w() - rhs.w(),
+        )
+    }
+}
+
+impl ops::SubAssign for Vec4 {
+    fn sub_assign(&mut self, rhs: Self) {
+        self.items[0] -= rhs.x();
+        self.items[1] -= rhs.y();
+        self.items[2] -= rhs.z();
+    }
+}
+
+impl ops::Mul for Vec4 {
+    type Output = Self;
+
+    fn mul(self, rhs: Self) -> Self::Output {
+        Self::new(
+            self.x() * rhs.x(),
+            self.y() * rhs.y(),
+            self.z() * rhs.z(),
+            self.w() * rhs.w(),
+        )
+    }
+}
+
+impl ops::MulAssign for Vec4 {
+    fn mul_assign(&mut self, rhs: Self) {
+        self.items[0] *= rhs.x();
+        self.items[1] *= rhs.y();
+        self.items[2] *= rhs.z();
+        self.items[3] *= rhs.w();
+    }
+}
+
+impl ops::Div for Vec4 {
+    type Output = Self;
+
+    fn div(self, rhs: Self) -> Self::Output {
+        Self::new(
+            self.x() / rhs.x(),
+            self.y() / rhs.y(),
+            self.z() / rhs.z(),
+            self.w() / rhs.z(),
+        )
+    }
+}
+
+impl ops::DivAssign for Vec4 {
+    fn div_assign(&mut self, rhs: Self) {
+        self.items[0] /= rhs.x();
+        self.items[1] /= rhs.y();
+        self.items[2] /= rhs.z();
+        self.items[3] /= rhs.w();
+    }
+}
+
+impl ops::Neg for Vec4 {
+    type Output = Self;
+
+    fn neg(self) -> Self::Output {
+        Self::new(-self.x(), -self.y(), -self.z(), self.w())
     }
 }
