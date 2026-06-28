@@ -3,20 +3,10 @@
 @group(0) @binding(0) var outputTex: texture_storage_2d<rgba8unorm, write>;
 @group(0) @binding(1) var<uniform> camera: Camera;
 struct Camera {
-    width: u32,
-    height: u32,
-    samples_per_pixel: i32,
-    pixels_sample_scale: f32,
-    image_center: vec3<f32>,
+    first_pixel_pos: vec3<f32>,
     pixel_delta_u: vec3<f32>,
     pixel_delta_v: vec3<f32>,
-    center: vec3<f32>,
-    defocus_disk_u: vec3<f32>,
-    defocus_disk_v: vec3<f32>,
-    maximum_depth: i32,
-    defocus_angle: f32,
-    _pad0: f32,
-    _pad1: f32,
+    position: vec3<f32>,
 }
 
 @group(1) @binding(0) var<uniform> util: UtilData;
@@ -189,16 +179,6 @@ fn ray_at(ray: Ray, t: f32) -> vec3<f32> {
     return ray.origin + t * ray.dir;
 }
 
-fn get_ray(uv: vec2<f32>) -> Ray {
-    let pixel_center = camera.image_center + 
-        camera.pixel_delta_u * uv.x + 
-        camera.pixel_delta_v * uv.y;
-
-    let dir = pixel_center - camera.center;
-
-    return Ray(camera.center, dir);
-}
-
 fn sky_color(dir: vec3<f32>) -> vec3<f32> {
     let a = 0.5 * (normalize(dir).y + 1.0);
     return (1.0 - a) * vec3(1.0, 1.0, 1.0) + a * vec3(0.5, 0.7, 1.0);
@@ -350,28 +330,14 @@ fn main(
 
     let aspect_ratio = f32(texture_dimensions.x) / f32(texture_dimensions.y);
 
-    let focal_length = 1.0;
-    let viewport_height = 2.0;
-    let viewport_width = viewport_height * aspect_ratio;
-    // let camera_center = vec3(0.0);
-
-    let viewport_u = vec3(viewport_width, 0.0, 0.0);
-    let viewport_v = vec3(0.0, -viewport_height, 0.0);
-
-    let pixel_delta_u = viewport_u / f32(texture_dimensions.x);
-    let pixel_delta_v = viewport_v / f32(texture_dimensions.y);
-
     var rng_state = local_invocation_index * 19347u;
-
-    let viewport_upper_left = camera.center - vec3(0.0, 0.0, focal_length) - viewport_u / 2.0 - viewport_v / 2.0;
-    let pixel00_loc = viewport_upper_left + 0.5 * (pixel_delta_u + pixel_delta_v);
 
     let random_sample = random_unit_vec3(& rng_state).xy * 0.5;
 
-    let pixel_center = pixel00_loc + (f32(workgroup_id.x) + random_sample.x) * pixel_delta_u + (f32(workgroup_id.y) + random_sample.y) * pixel_delta_v;
+    let pixel_center = camera.first_pixel_pos + (f32(workgroup_id.x) + random_sample.x) * camera.pixel_delta_u + (f32(workgroup_id.y) + random_sample.y) * camera.pixel_delta_v;
 
-    let ray_direction = normalize(pixel_center - camera.center);
-    workgroupColors[local_invocation_index] = get_color(Ray(camera.center, ray_direction), workgroup_id.xy, local_invocation_index);
+    let ray_direction = normalize(pixel_center - camera.position);
+    workgroupColors[local_invocation_index] = get_color(Ray(camera.position, ray_direction), workgroup_id.xy, local_invocation_index);
 
     workgroupBarrier();
 

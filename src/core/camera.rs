@@ -9,103 +9,107 @@ pub struct Camera {
     // aspect_ratio: f32,
     image_width: u32,
     image_height: u32,
-    pub center: Vec3,
-    image_center: Vec3,
+    position: Vec3,
+    look_at: Vec3,
+    // image_center: Vec3,
     pixel_delta_u: Vec3,
     pixel_delta_v: Vec3,
-    samples_per_pixel: i32,
-    pixels_sample_scale: f32,
-    maximum_depth: i32,
-    // vfov: f32,
+    first_pixel_pos: Vec3,
+    vfov: f32,
+    needs_update: bool,
     // u: Vec3,
     // v: Vec3,
     // w: Vec3,
-    defocus_angle: f32,
-    defocus_disk_u: Vec3,
-    defocus_disk_v: Vec3,
+    // defocus_angle: f32,
+    // defocus_disk_u: Vec3,
+    // defocus_disk_v: Vec3,
 }
 
 // const SAMPLES_PER_PIXEL: i32 = 10;
 // const MAXIMUM_DEPTH: i32 = 50;
 
 impl Camera {
-    pub fn build(
+    pub fn new(
         image_width: u32,
         image_height: u32,
         vfov: f32,
-        look_from: Vec3,
+        position: Vec3,
         look_at: Vec3,
-        samples_per_pixel: i32,
-        maximum_depth: i32,
-        defocus_angle: f32,
-        focus_dist: f32,
     ) -> Self {
-        // let image_height = (image_width as f32 / aspect_ratio) as i32;
-        // let image_height = if image_height < 1 { 1 } else { image_height };
-
-        let up_vector = Vec3::new(0.0, 1.0, 0.0);
-        let center = look_from.clone();
-
-        // let focal_length = (look_from.clone() - look_at.clone()).length();
-        let theta = vfov / 180.0 * consts::PI;
-        let h = f32::tan(theta / 2.0);
-        let viewport_height = 2.0 * h * focus_dist;
-        let viewport_width = viewport_height * (image_width as f32 / image_height as f32);
-
-        let w = (look_from - look_at).unit();
-        let u = up_vector.cross(&w).unit();
-        let v = w.cross(&u);
-
-        let viewport_u = u.mul(viewport_width);
-        let viewport_v = (-v.clone()).mul(viewport_height);
-
-        let pixel_delta_u = viewport_u.div(image_width as f32);
-        let pixel_delta_v = viewport_v.div(image_height as f32);
-
-        let viewport_upper_left =
-            center.clone() - w.mul(focus_dist) - viewport_u.div(2.0) - viewport_v.div(2.0);
-        let image_center =
-            viewport_upper_left + (pixel_delta_u.clone() + pixel_delta_v.clone()).mul(0.5);
-
-        let defocus_radius = focus_dist * f32::tan(defocus_angle / 2.0 / 180.0 * consts::PI);
-        let defocus_disk_u = u.mul(defocus_radius);
-        let defocus_disk_v = v.mul(defocus_radius);
-
         Self {
             image_width,
             image_height,
-            center,
-            image_center,
-            pixel_delta_u,
-            pixel_delta_v,
-            samples_per_pixel,
-            pixels_sample_scale: 1.0 / samples_per_pixel as f32,
-            maximum_depth: maximum_depth,
-            defocus_angle,
-            defocus_disk_u,
-            defocus_disk_v,
+            position,
+            look_at,
+            pixel_delta_u: Vec3::zero(),
+            pixel_delta_v: Vec3::zero(),
+            first_pixel_pos: Vec3::zero(),
+            vfov,
+            needs_update: true,
         }
     }
 
-    pub fn to_bytes(&self) -> [u8; 128] {
-        let mut bytes = [0u8; 128];
+    pub fn update(&mut self) {
+        if !self.needs_update {
+            return;
+        }
+        self.needs_update = false;
+        let up_vector = Vec3::new(0.0, 1.0, 0.0);
 
-        bytes[0..4].copy_from_slice(&self.image_width.to_le_bytes());
-        bytes[4..8].copy_from_slice(&self.image_height.to_le_bytes());
-        bytes[8..12].copy_from_slice(&self.samples_per_pixel.to_le_bytes());
-        bytes[12..16].copy_from_slice(&self.pixels_sample_scale.to_le_bytes());
+        let focal_length = (self.position - self.look_at).length();
+        let theta = self.vfov / 180.0 * consts::PI;
+        let h = f32::tan(theta / 2.0);
+        let viewport_height = 2.0 * h * focal_length;
 
-        bytes[16..32].copy_from_slice(&self.image_center.to_bytes());
-        bytes[32..48].copy_from_slice(&self.pixel_delta_u.to_bytes());
-        bytes[48..64].copy_from_slice(&self.pixel_delta_v.to_bytes());
-        bytes[64..80].copy_from_slice(&self.center.to_bytes());
-        bytes[80..96].copy_from_slice(&self.defocus_disk_u.to_bytes());
-        bytes[96..112].copy_from_slice(&self.defocus_disk_v.to_bytes());
+        let viewport_width = viewport_height * (self.image_width as f32 / self.image_height as f32);
 
-        bytes[112..116].copy_from_slice(&self.maximum_depth.to_le_bytes());
-        bytes[116..120].copy_from_slice(&self.defocus_angle.to_le_bytes());
+        let w = (self.position - self.look_at).normalize();
+        let u = up_vector.cross(&w).normalize();
+        let v = w.cross(&u);
+
+        let viewport_u = u.mul(viewport_width);
+        let viewport_v = (-v).mul(viewport_height);
+
+        self.pixel_delta_u = viewport_u.div(self.image_width as f32);
+        self.pixel_delta_v = viewport_v.div(self.image_height as f32);
+
+        let viewport_upper_left =
+            self.position - w.mul(focal_length) - viewport_u.div(2.0) - viewport_v.div(2.0);
+        self.first_pixel_pos =
+            viewport_upper_left + (self.pixel_delta_u + self.pixel_delta_v).mul(0.5);
+    }
+
+    /// ## WGSL schema:
+    /// struct Camera {
+    ///     first_pixel_pos: vec3<f32>,
+    ///     pixel_delta_u: vec3<f32>,
+    ///     pixel_delta_v: vec3<f32>,
+    ///     position: vec3<f32>,
+    /// }
+    pub fn to_bytes(&self) -> Vec<u8> {
+        let mut bytes = Vec::<u8>::new();
+        bytes.extend_from_slice(&self.first_pixel_pos.to_bytes());
+        bytes.extend_from_slice(&self.pixel_delta_u.to_bytes());
+        bytes.extend_from_slice(&self.pixel_delta_v.to_bytes());
+        bytes.extend_from_slice(&self.position.to_bytes());
+
+        // bytes[0..4].copy_from_slice();
+        // bytes[4..8].copy_from_slice();
+        // bytes[8..12].copy_from_slice(&self.samples_per_pixel.to_le_bytes());
+        // bytes[12..16].copy_from_slice(&self.pixels_sample_scale.to_le_bytes());
+
+        // bytes[16..32].copy_from_slice(&self.image_center.to_bytes());
+        // bytes[32..48].copy_from_slice(&self.pixel_delta_u.to_bytes());
+        // bytes[48..64].copy_from_slice(&self.pixel_delta_v.to_bytes());
+        // bytes[64..80].copy_from_slice(&self.position.to_bytes());
+        // bytes[80..96].copy_from_slice(&self.defocus_disk_u.to_bytes());
+        // bytes[96..112].copy_from_slice(&self.defocus_disk_v.to_bytes());
+
+        // bytes[112..116].copy_from_slice(&self.maximum_depth.to_le_bytes());
+        // bytes[116..120].copy_from_slice(&self.defocus_angle.to_le_bytes());
         // bytes[96..128].copy_from_slice(&[0u8; 32]);
 
+        assert!(bytes.len() % 4 == 0);
         bytes
 
         // let mut bytes = [0u8; 128];
@@ -137,7 +141,43 @@ impl Camera {
     }
 
     pub fn translate(&mut self, vec: Vec3) {
-        self.center += vec;
+        self.position += vec;
+        self.needs_update = true;
+    }
+
+    pub fn rotate(&mut self, x: f32, y: f32) {
+        let mut local_x = self.look_at.x() - self.position.x();
+        let mut local_y = self.look_at.y() - self.position.y();
+        let mut local_z = self.look_at.z() - self.position.z();
+
+        // ---- STEP 2: Rotate around X-axis ----
+        // X stays the same. Y and Z change.
+        let cos_x = x.cos();
+        let sin_x = x.sin();
+
+        let y_after_x = local_y * cos_x - local_z * sin_x;
+        let z_after_x = local_y * sin_x + local_z * cos_x;
+
+        local_y = y_after_x;
+        local_z = z_after_x;
+
+        // ---- STEP 3: Rotate around Y-axis ----
+        // Y stays the same. X and Z change.
+        let cos_y = y.cos();
+        let sin_y = y.sin();
+
+        let x_after_y = local_x * cos_y + local_z * sin_y;
+        let z_after_y = -local_x * sin_y + local_z * cos_y;
+
+        local_x = x_after_y;
+        local_z = z_after_y;
+        self.look_at = Vec3::new(
+            local_x + self.position.x(),
+            local_y + self.position.y(),
+            local_z + self.position.z(),
+        );
+
+        self.needs_update = true;
     }
 
     // pub fn render(&self, world: &impl Hittable, mut target: impl Write) {

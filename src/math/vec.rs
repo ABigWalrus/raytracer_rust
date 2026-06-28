@@ -2,7 +2,7 @@ use std::ops;
 
 use crate::util::random_float_range;
 
-#[derive(Clone)]
+#[derive(Clone, Copy)]
 pub struct Vec3 {
     value: [f32; 3],
 }
@@ -58,7 +58,7 @@ impl Vec3 {
         )
     }
 
-    pub fn unit(&self) -> Self {
+    pub fn normalize(&self) -> Self {
         self.div(self.length())
     }
 

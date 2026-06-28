@@ -109,16 +109,12 @@ impl<'window> RenderState<'window> {
         let texture_view = render_texture.create_view(&wgpu::wgt::TextureViewDescriptor::default());
         let sampler = device.create_sampler(&wgpu::wgt::SamplerDescriptor::default());
 
-        let camera = Camera::build(
+        let camera = Camera::new(
             window_size.width,
             window_size.height,
-            20.0,
+            60.0,
             Vec3::new(0.0, 0.0, 0.0),
-            Vec3::new(0.0, 0.0, 0.0),
-            10,
-            50,
-            0.6,
-            10.0,
+            Vec3::new(0.0, 0.0, -1.0),
         );
 
         let camera_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
@@ -354,7 +350,7 @@ impl<'window> RenderState<'window> {
         self.queue
             .write_buffer(&self.util_buffer, 0, &self.util_data.to_bytes());
 
-        // self.camera.updat
+        self.camera.update();
         self.queue
             .write_buffer(&self.camera_buffer, 0, &self.camera.to_bytes());
     }

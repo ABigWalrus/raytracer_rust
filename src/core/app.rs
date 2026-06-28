@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::{collections::HashSet, sync::Arc};
 
 use winit::{
     application::ApplicationHandler,
@@ -12,6 +12,7 @@ use crate::{core::render_state::RenderState, math::Vec3};
 pub struct RayTracer<'window> {
     render_state: Option<RenderState<'window>>,
     window: Option<Arc<Window>>,
+    keys_pressed: HashSet<KeyCode>,
 }
 
 impl RayTracer<'_> {
@@ -19,6 +20,7 @@ impl RayTracer<'_> {
         Self {
             render_state: None,
             window: None,
+            keys_pressed: HashSet::new(),
         }
     }
 }
@@ -77,6 +79,18 @@ impl ApplicationHandler for RayTracer<'_> {
             }
             WindowEvent::RedrawRequested => {
                 if let Some(state) = &mut self.render_state {
+                    if self.keys_pressed.contains(&KeyCode::KeyW) {
+                        state.camera.translate(Vec3::new(0.0, 0.0, -0.05));
+                    }
+                    if self.keys_pressed.contains(&KeyCode::KeyS) {
+                        state.camera.translate(Vec3::new(0.0, 0.0, 0.05));
+                    }
+                    if self.keys_pressed.contains(&KeyCode::KeyA) {
+                        state.camera.translate(Vec3::new(0.05, 0.0, 0.0));
+                    }
+                    if self.keys_pressed.contains(&KeyCode::KeyD) {
+                        state.camera.translate(Vec3::new(-0.05, 0.0, 0.0));
+                    }
                     state.update();
                     state.render();
                 }
@@ -100,24 +114,13 @@ impl ApplicationHandler for RayTracer<'_> {
                 ..
             } => {
                 if !repeat && let Some(render_state) = &mut self.render_state {
-                    let speed = 0.05;
                     match state {
-                        ElementState::Pressed => match key_code {
-                            KeyCode::KeyW => {
-                                render_state.camera.translate(Vec3::new(0.0, 0.0, -speed))
-                            }
-                            KeyCode::KeyA => {
-                                render_state.camera.translate(Vec3::new(-speed, 0.0, 0.0))
-                            }
-                            KeyCode::KeyS => {
-                                render_state.camera.translate(Vec3::new(0.0, 0.0, speed))
-                            }
-                            KeyCode::KeyD => {
-                                render_state.camera.translate(Vec3::new(speed, 0.0, 0.0))
-                            }
-                            _ => (),
-                        },
-                        ElementState::Released => (),
+                        ElementState::Pressed => {
+                            self.keys_pressed.insert(key_code);
+                        }
+                        ElementState::Released => {
+                            self.keys_pressed.remove(&key_code);
+                        }
                     }
                 }
             }
@@ -132,11 +135,12 @@ impl ApplicationHandler for RayTracer<'_> {
         event: DeviceEvent,
     ) {
         match event {
-            DeviceEvent::MouseMotion { delta } => {
-                if let Some(render_state) = &mut self.render_state {
+            DeviceEvent::MouseMotion { delta: (x, y) } => {
+                if let (Some(render_state), Some(window)) = (&mut self.render_state, &self.window) {
+                    let size = window.inner_size();
                     render_state
                         .camera
-                        .translate(Vec3::new(0.0, (delta.1 / 600.0) as f32, 0.0));
+                        .rotate(x as f32 / size.width as f32, y as f32 / size.height as f32);
                 }
                 // println!("{:?}", delta);
             }
