@@ -6,7 +6,7 @@ use std::{
 
 use rand::{Rng, rng};
 
-use crate::math::Vec3;
+use crate::math::vec::Vec3;
 
 #[allow(unused)]
 pub fn print_progress(j: i32, height: i32) {

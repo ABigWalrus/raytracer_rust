@@ -7,7 +7,7 @@ use winit::{
     window::Window,
 };
 
-use crate::{core::render_state::RenderState, math::Vec3};
+use crate::{core::render_state::RenderState, math::vec::Vec3};
 
 pub struct RayTracer<'window> {
     render_state: Option<RenderState<'window>>,

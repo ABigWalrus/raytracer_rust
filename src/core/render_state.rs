@@ -14,7 +14,7 @@ use wgpu::{
 
 use crate::core::camera::Camera;
 use crate::core::texture::Texture;
-use crate::math::Vec3;
+use crate::math::vec::Vec3;
 
 pub struct RenderState<'window> {
     surface: wgpu::Surface<'window>,

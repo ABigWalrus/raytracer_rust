@@ -1,6 +1,9 @@
 use std::f32::consts;
 
-use crate::math::{Mat4, Radians, Vec3, Vec4};
+use crate::math::{
+    mat::Mat4,
+    vec::{Radians, Vec3, Vec4},
+};
 
 pub struct Camera {
     // aspect_ratio: f32,
